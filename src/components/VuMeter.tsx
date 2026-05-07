@@ -45,14 +45,19 @@ export function VuMeter({ level, active }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
+      <div
+        className="relative h-2.5 w-full overflow-hidden rounded-full"
+        style={{
+          background:
+            "linear-gradient(90deg, #10b981 0%, #10b981 55%, #f59e0b 78%, #ef4444 100%)",
+        }}
+      >
+        {/* Cover panel from the right "eats" the unfilled portion. The gradient
+            beneath stays at full container width, so green/yellow/red sit at
+            fixed positions instead of being compressed into the level bar. */}
         <div
-          className="absolute inset-y-0 left-0 transition-[width] duration-75 ease-out"
-          style={{
-            width: `${pct}%`,
-            background:
-              "linear-gradient(90deg, #10b981 0%, #10b981 55%, #f59e0b 78%, #ef4444 100%)",
-          }}
+          className="absolute inset-y-0 right-0 bg-zinc-800 transition-[width] duration-75 ease-out"
+          style={{ width: `${100 - pct}%` }}
         />
         <div
           className="absolute inset-y-0 w-0.5 bg-white/90 transition-opacity"

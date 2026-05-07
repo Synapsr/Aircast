@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Mic, Radio, Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
+import { AboutModal } from "@/components/AboutModal";
 import { AddServerFromLinkModal } from "@/components/AddServerFromLinkModal";
 import { DevicePill } from "@/components/DevicePill";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -52,6 +53,7 @@ function Shell({ settings, updateSettings }: ShellProps) {
   const { t } = useT();
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { config, update: updateConfig, loaded: configLoaded } = useCurrentConfig(deviceId);
@@ -210,17 +212,19 @@ function Shell({ settings, updateSettings }: ShellProps) {
 
   return (
     <main className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex shrink-0 items-center justify-between gap-4 bg-zinc-950 px-5 py-3.5">
-        <div className="flex items-center gap-2.5">
+      <header className="grid shrink-0 grid-cols-3 items-center gap-4 bg-zinc-950 px-5 py-3.5">
+        <div className="flex items-center gap-2.5 justify-self-start">
           <div className="rounded-xl bg-rose-500 p-2 text-white shadow-md shadow-rose-500/30">
             <Radio className="h-4 w-4" />
           </div>
           <h1 className="text-base font-semibold tracking-tight">Aircast</h1>
         </div>
 
-        <ModeSwitch value={mode} onChange={setMode} />
+        <div className="justify-self-center">
+          <ModeSwitch value={mode} onChange={setMode} />
+        </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-self-end">
           <DevicePill value={deviceId} onChange={setDeviceId} />
           <button
             type="button"
@@ -249,7 +253,8 @@ function Shell({ settings, updateSettings }: ShellProps) {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
           {mode === "simple" ? (
-            <div className="mx-auto w-full max-w-2xl">
+            // Vertically center the simple-mode card when there's room.
+            <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
               <SimpleMode
                 level={level}
                 vuActive={vuActive}
@@ -273,7 +278,12 @@ function Shell({ settings, updateSettings }: ShellProps) {
         </div>
       </div>
 
-      <StatusBar status={status} micOpen={micOpen} deviceName={deviceId} />
+      <StatusBar
+        status={status}
+        micOpen={micOpen}
+        deviceName={deviceId}
+        onAboutClick={() => setShowAbout(true)}
+      />
 
       {config && (
         <SettingsModal
@@ -293,6 +303,8 @@ function Shell({ settings, updateSettings }: ShellProps) {
         onCancel={handleCancelLink}
         onConfirm={handleConfirmLink}
       />
+
+      <AboutModal open={showAbout} onClose={() => setShowAbout(false)} />
 
       <ErrorDialog
         open={lastStreamError !== null}

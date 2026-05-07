@@ -109,6 +109,7 @@ pub fn run() {
             commands::cart_play,
             commands::cart_stop,
             commands::cart_snapshot,
+            commands::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

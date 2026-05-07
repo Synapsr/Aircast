@@ -7,9 +7,10 @@ interface Props {
   status: StreamStatus;
   micOpen: boolean;
   deviceName: string | null;
+  onAboutClick: () => void;
 }
 
-export function StatusBar({ status, micOpen, deviceName }: Props) {
+export function StatusBar({ status, micOpen, deviceName, onAboutClick }: Props) {
   const { t } = useT();
   const { muted, toggle } = useMonitorMuted();
 
@@ -29,8 +30,8 @@ export function StatusBar({ status, micOpen, deviceName }: Props) {
   })();
 
   return (
-    <footer className="flex items-center justify-between gap-3 border-t border-zinc-900 bg-zinc-950 px-5 py-3 text-xs">
-      <div className="flex items-center gap-3">
+    <footer className="grid grid-cols-3 items-center gap-3 border-t border-zinc-900 bg-zinc-950 px-5 py-3 text-xs">
+      <div className="flex items-center gap-3 justify-self-start">
         <span className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${stream.dot}`} />
           <span className={`font-medium ${stream.className}`}>{stream.text}</span>
@@ -44,7 +45,16 @@ export function StatusBar({ status, micOpen, deviceName }: Props) {
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={onAboutClick}
+        className="justify-self-center text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
+      >
+        {t("about.proudly")}{" "}
+        <span className="font-semibold text-zinc-300 hover:text-rose-300">Synapsr</span>
+      </button>
+
+      <div className="flex items-center gap-3 justify-self-end">
         <span className="truncate text-zinc-500">{deviceName ?? t("status.noInput")}</span>
         <button
           type="button"

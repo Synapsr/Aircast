@@ -140,6 +140,13 @@
     "pasteInvalid": "Le presse-papier ne contient pas un lien Aircast valide.",
     "pasteEmpty": "Ton presse-papier est vide."
   },
+  "about": {
+    "proudly": "Fièrement fait par",
+    "tagline": "Streaming radio open-source.",
+    "body": "Aircast est une application desktop native et gratuite pour diffuser un micro (et plus) vers n'importe quel serveur Icecast. Pas d'abonnement, pas de cloud verrouillé — votre antenne reste la vôtre.",
+    "visitSynapsr": "Visiter synapsr.io",
+    "license": "Licence MIT · Construit avec Tauri, Rust et React"
+  },
   "errors": {
     "openSetup": "Ouvrir les réglages",
     "noServer": "Ajoute d'abord un serveur — ouvre les réglages.",

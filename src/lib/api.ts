@@ -129,4 +129,9 @@ export const api = {
   cartSnapshot(): Promise<CartSnapshot[]> {
     return invoke("cart_snapshot");
   },
+
+  // ───── external links ─────
+  openExternal(url: string): Promise<void> {
+    return invoke("open_external", { url });
+  },
 };

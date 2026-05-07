@@ -458,6 +458,37 @@ pub fn cart_snapshot(state: tauri::State<'_, AppState>) -> AppResult<Vec<CartSna
         .snapshot())
 }
 
+// ──────────────────── external links ────────────────────
+
+/// Open a URL in the user's default browser. We avoid pulling in
+/// `tauri-plugin-shell` for a single use case — the cost of one tiny
+/// platform-specific spawn is much less than dragging in another plugin
+/// (and its capability surface) for a single call site.
+#[tauri::command]
+pub fn open_external(url: String) -> AppResult<()> {
+    // Refuse anything that isn't an https/http URL so this command can never
+    // be coerced into running an arbitrary local command.
+    let lower = url.to_lowercase();
+    if !(lower.starts_with("https://") || lower.starts_with("http://")) {
+        return Err(AppError::Stream(format!("refusing to open: {url}")));
+    }
+
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(&url).spawn();
+
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "start", "", &url])
+        .spawn();
+
+    #[cfg(target_os = "linux")]
+    let result = std::process::Command::new("xdg-open").arg(&url).spawn();
+
+    result
+        .map(|_| ())
+        .map_err(|e| AppError::Stream(format!("open url: {e}")))
+}
+
 // ──────────────────── helpers ────────────────────
 
 fn emit_music_state(app: &AppHandle, state: &tauri::State<'_, AppState>) {
