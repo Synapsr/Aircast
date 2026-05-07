@@ -1,0 +1,183 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Only one release at a time.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Bundle ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (Apple Silicon)
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_glob: |
+              src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
+          - label: macOS (Intel)
+            os: macos-13
+            target: x86_64-apple-darwin
+            artifact_glob: |
+              src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app.tar.gz
+          - label: Windows (x64)
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_glob: |
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+              dist-portable/Aircast-portable-windows-x64.zip
+          - label: Linux (x64)
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_glob: |
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            libssl-dev \
+            patchelf \
+            pkg-config
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ matrix.target }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.target }}-cargo-
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch ffmpeg sidecar
+        run: pnpm fetch-ffmpeg
+
+      - name: Build Tauri bundle
+        run: pnpm tauri build --config src-tauri/tauri.bundle.conf.json --target ${{ matrix.target }}
+        env:
+          # macOS code signing (skipped if secrets are not set).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # Tauri updater signing (optional).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # Portable Windows zip: aircast.exe + ffmpeg.exe side-by-side, no install,
+      # no admin. Just extract and run. Requires WebView2 runtime on the host
+      # (default on Windows 10 1803+ and Windows 11).
+      - name: Package portable Windows zip
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          $portableDir = "dist-portable/Aircast-portable-windows-x64"
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+          Copy-Item "src-tauri/target/${{ matrix.target }}/release/aircast.exe" "$portableDir/Aircast.exe"
+          Copy-Item "src-tauri/binaries/ffmpeg-${{ matrix.target }}.exe" "$portableDir/ffmpeg.exe"
+          # WebView2Loader.dll lands in the build dir on some toolchain combos.
+          # Ship it when present; the app falls back to the system one otherwise.
+          $loader = Get-ChildItem "src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll" -ErrorAction SilentlyContinue
+          if ($loader) { Copy-Item $loader.FullName $portableDir }
+          @"
+          Aircast portable build for Windows x64.
+
+          Extract this folder anywhere (Desktop, Documents, USB stick, ...) and
+          double-click Aircast.exe. No installation and no admin rights are
+          required.
+
+          Requires Windows 10 1803+ or Windows 11 (WebView2 runtime is bundled
+          with the operating system on those versions). On older Windows, install
+          the WebView2 runtime from:
+            https://developer.microsoft.com/microsoft-edge/webview2/
+          "@ | Out-File -Encoding utf8 "$portableDir/README.txt"
+          Compress-Archive -Path $portableDir -DestinationPath "dist-portable/Aircast-portable-windows-x64.zip"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aircast-${{ matrix.target }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: warn
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: find dist -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            dist/**/*.dmg
+            dist/**/*.msi
+            dist/**/*.exe
+            dist/**/*.deb
+            dist/**/*.rpm
+            dist/**/*.AppImage
+            dist/**/*.app.tar.gz
+            dist/**/Aircast-portable-windows-x64.zip

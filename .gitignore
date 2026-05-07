@@ -1,0 +1,60 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies & builds
+node_modules
+dist
+dist-ssr
+*.local
+coverage
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri / Rust
+src-tauri/target
+src-tauri/gen
+
+# ffmpeg sidecar binaries (fetched via `pnpm fetch-ffmpeg`)
+src-tauri/binaries/ffmpeg-*
+src-tauri/.ffmpeg-tmp
+
+# Built bundles that may end up at the repo root if someone copies them there
+*.dmg
+*.msi
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.app.tar.gz
+
+# Secrets — must never land in a public repo
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# Local agent / scratch
+.claude/
+
+# Internal planning & audit notes — kept out of the public repo
+PLAN.md
+AUDIT.md

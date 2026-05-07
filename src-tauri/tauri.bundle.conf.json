@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/ffmpeg"],
+    "resources": []
+  }
+}

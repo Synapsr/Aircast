@@ -1,0 +1,160 @@
+{
+  "common": {
+    "save": "Enregistrer",
+    "load": "Charger",
+    "delete": "Supprimer",
+    "done": "Terminé",
+    "cancel": "Annuler",
+    "dismiss": "Fermer"
+  },
+  "header": {
+    "tagline": "Diffuse ton micro sur Icecast.",
+    "setup": "Réglages"
+  },
+  "mode": {
+    "simple": "Simple",
+    "studio": "Studio"
+  },
+  "device": {
+    "label": "Micro",
+    "empty": "Aucun micro détecté",
+    "default": " (par défaut)",
+    "refresh": "Rafraîchir les micros",
+    "pick": "Choisis un micro",
+    "change": "Changer de micro"
+  },
+  "vu": {
+    "label": "Niveau"
+  },
+  "simple": {
+    "serverPrefix": "Serveur :",
+    "noServer": "Pas de serveur configuré. Ouvre les réglages pour en ajouter un."
+  },
+  "goLive": {
+    "go": "Passer à l'antenne",
+    "stop": "Arrêter la diffusion",
+    "connecting": "Connexion…"
+  },
+  "status": {
+    "ready": "Prêt à diffuser",
+    "connecting": "Connexion…",
+    "live": "À l'antenne",
+    "reconnecting": "Reconnexion…",
+    "reconnectingIn": "Reconnexion dans {seconds}s…",
+    "offAir": "Hors antenne",
+    "micOpen": "Micro ouvert",
+    "micMuted": "Micro coupé",
+    "noInput": "Pas de micro",
+    "monitorOn": "Retour activé",
+    "monitorOff": "Retour coupé",
+    "monitorMuteHint": "Couper le retour (silence haut-parleurs)",
+    "monitorUnmuteHint": "Activer le retour (s'entendre)"
+  },
+  "nowPlaying": {
+    "label": "À l'antenne",
+    "pressPlay": "Appuie sur Lecture",
+    "emptyQueue": "File d'attente vide",
+    "upNext": "Suivant :",
+    "lastTrack": "Dernier morceau de la file",
+    "upFirst": "À jouer : {title}",
+    "addBelow": "Ajoute des morceaux ci-dessous.",
+    "tracksInQueue_one": "{count} morceau dans la file",
+    "tracksInQueue_other": "{count} morceaux dans la file",
+    "elapsed": "écoulé",
+    "remaining": "restant",
+    "unknownDuration": "en cours"
+  },
+  "transport": {
+    "play": "Lecture",
+    "pause": "Pause",
+    "stop": "Arrêter",
+    "next": "Suivant"
+  },
+  "queue": {
+    "title": "File",
+    "add": "Ajouter",
+    "nowPlaying": "En cours",
+    "empty": "Pas encore de morceaux",
+    "emptyHint": "Clique ici ou sur « Ajouter » pour commencer une file.",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "remove": "Supprimer"
+  },
+  "carts": {
+    "title": "Cartouches",
+    "hint": "Clique pour jouer",
+    "slot": "Case {n}",
+    "remove": "Supprimer la cartouche"
+  },
+  "mic": {
+    "open": "Micro ouvert",
+    "tapToOpen": "Appuie pour ouvrir le micro"
+  },
+  "settings": {
+    "title": "Réglages",
+    "serversTitle": "Serveurs",
+    "newServer": "Nouveau",
+    "deleteServer": "Supprimer ce serveur",
+    "empty": "Aucun serveur",
+    "emptyHint": "Clique sur « Nouveau » pour en créer un.",
+    "selectHint": "Choisis un serveur dans la liste, ou clique sur « Nouveau ».",
+    "active": "Actif",
+    "serverNamePlaceholder": "Serveur sans titre",
+    "nameTaken": "Un serveur avec ce nom existe déjà.",
+    "savedAuto": "Enregistré automatiquement.",
+    "language": "Langue",
+    "languageAuto": "Auto",
+    "languageEn": "English",
+    "languageFr": "Français",
+    "server": "Serveur",
+    "host": "Hôte",
+    "port": "Port",
+    "mount": "Point de montage",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "encoding": "Encodage",
+    "format": "Format",
+    "bitrate": "Débit",
+    "advanced": "Avancé",
+    "reconnect": "Intervalle de reconnexion (secondes — 0 pour désactiver)",
+    "ducking": "Volume musique quand micro ouvert",
+    "duckingHint": "Baisse la musique pour laisser passer ta voix.",
+    "crossfade": "Fondu entre les morceaux",
+    "crossfadeHint": "Enchaîne en douceur le morceau précédent et le suivant.",
+    "secondsShort": "s",
+    "off": "Off"
+  },
+  "link": {
+    "title": "Ajouter un serveur depuis un lien",
+    "subtitle": "Aircast a reçu un lien magique avec une configuration de serveur.",
+    "questionMark": "Ajouter ce serveur à ta liste ?",
+    "name": "Nom",
+    "server": "Serveur",
+    "credentials": "Identifiants",
+    "encoding": "Encodage",
+    "anonymous": "(sans mot de passe)",
+    "add": "Ajouter",
+    "renamedHint": "Un serveur avec ce nom existe déjà — il sera sauvegardé sous « {name} ».",
+    "paste": "Coller un lien",
+    "pasteHint": "Colle un lien aircast:// depuis ton presse-papier.",
+    "pasteInvalid": "Le presse-papier ne contient pas un lien Aircast valide.",
+    "pasteEmpty": "Ton presse-papier est vide."
+  },
+  "errors": {
+    "openSetup": "Ouvrir les réglages",
+    "noServer": "Ajoute d'abord un serveur — ouvre les réglages.",
+    "noDevice": "Choisis d'abord un micro.",
+    "missingHost": "L'adresse du serveur manque.",
+    "badPort": "Le port doit être entre 1 et 65535.",
+    "missingMount": "Le point de montage manque (par exemple /aircast.mp3).",
+    "mountSlash": "Le point de montage doit commencer par « / ».",
+    "missingUsername": "Le nom d'utilisateur manque (Icecast attend généralement « source »).",
+    "dialogTitle": "Échec de connexion",
+    "details": "Détails techniques",
+    "showDetails": "Voir les détails",
+    "hideDetails": "Masquer les détails",
+    "copy": "Copier",
+    "copied": "Copié !",
+    "ok": "OK"
+  }
+}

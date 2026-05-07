@@ -1,0 +1,160 @@
+{
+  "common": {
+    "save": "Save",
+    "load": "Load",
+    "delete": "Delete",
+    "done": "Done",
+    "cancel": "Cancel",
+    "dismiss": "Dismiss"
+  },
+  "header": {
+    "tagline": "Push your mic to Icecast.",
+    "setup": "Setup"
+  },
+  "mode": {
+    "simple": "Simple",
+    "studio": "Studio"
+  },
+  "device": {
+    "label": "Microphone",
+    "empty": "No microphone found",
+    "default": " (default)",
+    "refresh": "Refresh microphones",
+    "pick": "Pick a microphone",
+    "change": "Change microphone"
+  },
+  "vu": {
+    "label": "Live level"
+  },
+  "simple": {
+    "serverPrefix": "Server:",
+    "noServer": "No server configured. Open Setup to add one."
+  },
+  "goLive": {
+    "go": "Go live",
+    "stop": "Stop streaming",
+    "connecting": "Connecting…"
+  },
+  "status": {
+    "ready": "Ready to go live",
+    "connecting": "Connecting…",
+    "live": "On air",
+    "reconnecting": "Reconnecting…",
+    "reconnectingIn": "Reconnecting in {seconds}s…",
+    "offAir": "Off air",
+    "micOpen": "Mic open",
+    "micMuted": "Mic muted",
+    "noInput": "No input",
+    "monitorOn": "Monitor on",
+    "monitorOff": "Monitor off",
+    "monitorMuteHint": "Mute monitor (silence speakers)",
+    "monitorUnmuteHint": "Unmute monitor (hear yourself)"
+  },
+  "nowPlaying": {
+    "label": "On air",
+    "pressPlay": "Press play",
+    "emptyQueue": "Queue is empty",
+    "upNext": "Up next:",
+    "lastTrack": "Last track in queue",
+    "upFirst": "Up first: {title}",
+    "addBelow": "Add some tracks below.",
+    "tracksInQueue_one": "{count} track in queue",
+    "tracksInQueue_other": "{count} tracks in queue",
+    "elapsed": "elapsed",
+    "remaining": "remaining",
+    "unknownDuration": "live"
+  },
+  "transport": {
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "next": "Next"
+  },
+  "queue": {
+    "title": "Queue",
+    "add": "Add tracks",
+    "nowPlaying": "Now playing",
+    "empty": "No tracks yet",
+    "emptyHint": "Click here or \"Add tracks\" to start a queue.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "remove": "Remove"
+  },
+  "carts": {
+    "title": "Carts",
+    "hint": "Click to play",
+    "slot": "Slot {n}",
+    "remove": "Remove cart"
+  },
+  "mic": {
+    "open": "Mic open",
+    "tapToOpen": "Tap to open mic"
+  },
+  "settings": {
+    "title": "Setup",
+    "serversTitle": "Servers",
+    "newServer": "New",
+    "deleteServer": "Delete this server",
+    "empty": "No servers yet",
+    "emptyHint": "Click \"New\" to create your first one.",
+    "selectHint": "Pick a server from the list, or click \"New\".",
+    "active": "Active",
+    "serverNamePlaceholder": "Untitled server",
+    "nameTaken": "A server with this name already exists.",
+    "savedAuto": "Saved automatically.",
+    "language": "Language",
+    "languageAuto": "Auto",
+    "languageEn": "English",
+    "languageFr": "Français",
+    "server": "Server",
+    "host": "Host",
+    "port": "Port",
+    "mount": "Mount point",
+    "username": "Username",
+    "password": "Password",
+    "encoding": "Encoding",
+    "format": "Format",
+    "bitrate": "Bitrate",
+    "advanced": "Advanced",
+    "reconnect": "Reconnect interval (seconds — 0 to disable)",
+    "ducking": "Music volume when mic is open",
+    "duckingHint": "Drops the music level so your voice cuts through.",
+    "crossfade": "Crossfade between tracks",
+    "crossfadeHint": "Smoothly blend the previous track into the next when you skip.",
+    "secondsShort": "s",
+    "off": "Off"
+  },
+  "link": {
+    "title": "Add server from link",
+    "subtitle": "Aircast received a magic link with a server config.",
+    "questionMark": "Add this server to your list?",
+    "name": "Name",
+    "server": "Server",
+    "credentials": "Credentials",
+    "encoding": "Encoding",
+    "anonymous": "(no password)",
+    "add": "Add server",
+    "renamedHint": "A server with this name already exists — it will be saved as \"{name}\".",
+    "paste": "Paste link",
+    "pasteHint": "Paste an aircast:// link from your clipboard.",
+    "pasteInvalid": "The clipboard doesn't contain a valid Aircast link.",
+    "pasteEmpty": "Your clipboard is empty."
+  },
+  "errors": {
+    "openSetup": "Open Setup",
+    "noServer": "Add a server first — open Setup.",
+    "noDevice": "Pick a microphone first.",
+    "missingHost": "Server address is missing.",
+    "badPort": "Server port must be between 1 and 65535.",
+    "missingMount": "Mount point is missing (something like /aircast.mp3).",
+    "mountSlash": "Mount point should start with a slash, e.g. /aircast.mp3.",
+    "missingUsername": "Username is missing (Icecast usually expects 'source').",
+    "dialogTitle": "Connection failed",
+    "details": "Technical details",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "ok": "OK"
+  }
+}
