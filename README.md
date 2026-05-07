@@ -1,195 +1,192 @@
-# Aircast
+<div align="right">
 
-A minimal, portable desktop app for radio operators that pushes a microphone input to an Icecast server.
+🌐 **Language**: [Français](README.fr.md) | **English**
 
-> _Screenshot placeholder — drop a PNG in `docs/screenshot.png` once the UI is final._
+</div>
 
-## What it does
+<div align="center">
 
-- Pick any audio input the OS exposes (built-in mic, USB interface, virtual cable…).
-- Configure your Icecast server in a single modal: host, port, mount, credentials, format, bitrate.
-- Save and recall multiple **presets** for different stations or rehearsal/production servers.
-- Click **Go Live**. Watch the **VU meter** to confirm levels. Watch the **status badge** for connection health.
-- If the connection drops mid-stream, Aircast **auto-reconnects** every _N_ seconds (configurable; off if you set 0).
+# 🎙️ Aircast
 
-It's intentionally small. The default "Simple" mode is one device dropdown, one VU bar, one big button.
+### The Open-Source Desktop App for Radio Streaming
 
-A future "Studio" mode is planned: music queue, jingle pads (cartoucheur), and auto-ducking when the mic opens. The Rust audio path is structured to receive that cleanly without a rewrite.
+**Stop paying for proprietary streaming software. Own your radio.**
 
-## Tech stack
+[![Latest Release](https://img.shields.io/github/v/release/Synapsr/Aircast?style=for-the-badge&logo=github&label=Release)](https://github.com/Synapsr/Aircast/releases/latest)
+[![GitHub Stars](https://img.shields.io/github/stars/Synapsr/Aircast?style=for-the-badge&logo=github)](https://github.com/Synapsr/Aircast)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Built with Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=for-the-badge&logo=tauri&logoColor=black)](https://tauri.app/)
 
-| Layer | Choice |
-|---|---|
-| Shell | [Tauri 2](https://tauri.app/) |
-| UI | React 18 + TypeScript + [Tailwind CSS v4](https://tailwindcss.com/) |
-| Audio capture | [`cpal`](https://crates.io/crates/cpal) (Rust) — input device enumeration + PCM capture |
-| Encoding + transport | `ffmpeg` subprocess, fed raw `f32le` PCM via stdin, encoding to MP3 (libmp3lame) or AAC (native) and pushing via the `icecast://` protocol |
-| Persistence | a single `aircast.json` in the OS app-data directory |
+[⬇️ Download](#%EF%B8%8F-quick-start) • [✨ Features](#-features) • [🏗️ Architecture](docs/architecture.md) • [🤝 Contributing](docs/contributing.md)
 
-ffmpeg is **bundled as a Tauri sidecar** for distribution builds (LGPL, audio-only — no x264/x265). For `pnpm tauri dev`, Aircast falls back to whatever `ffmpeg` is on your `PATH`.
+<br>
 
-## Installing (end users)
+<img src="src-tauri/icons/icon.png" width="120" alt="Aircast logo" />
 
-> Pre-built binaries are not yet published. For now, build from source — see below.
+</div>
 
-When releases ship, the install will be a single `.dmg` (macOS), `.exe` (Windows) or `.AppImage` / `.deb` (Linux). No admin rights, no separate ffmpeg install.
+---
 
-The first time you select an input device, macOS will ask for microphone permission.
+## 💡 What is Aircast?
 
-## Building from source
+Aircast is a **portable native desktop app** that captures any audio input and streams it to an Icecast server. Pick your microphone, save your server presets, click **Go Live**. Add a music queue, jingle cartridges with one-shot triggering, mic ducking and crossfade in **Studio mode**.
 
-### Requirements
+Built for radio operators who want to **own their tooling** — no subscriptions, no cloud lock-in, no hidden costs.
 
-- **Rust** (stable). Install via [rustup](https://rustup.rs/).
-- **Node 20+** and **pnpm 10+**.
-- An **Icecast** server to push to. For local testing, a [tiny Docker image](https://hub.docker.com/r/infiniteproject/icecast) is the fastest route:
-  ```sh
-  docker run -p 8000:8000 -e ICECAST_SOURCE_PASSWORD=hackme infiniteproject/icecast
-  ```
-- For development only, **ffmpeg** on your `PATH`. macOS: `brew install ffmpeg`. Linux: your package manager. Windows: [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) or [BtbN](https://github.com/BtbN/FFmpeg-Builds/releases).
-  Distribution builds bundle ffmpeg automatically — see "Building for distribution" below.
+```
+                                                     ┌────────────────┐
+   🎙️  Mic   ─┐                                       │  🌐 Icecast    │
+              │                                       │     server     │
+   🎵  Music ─┼─►  Mixer  ─►  ffmpeg (PUT) ─►  ─────► │  (your radio)  │
+              │                                       └────────────────┘
+   🎚️  Cart  ─┘
+              │
+              └────────► 🔊 Local monitor (always on, never cuts)
+```
 
-### Run in development
+---
 
-```sh
+## 🎯 Why Aircast?
+
+|             💸 **Free & Open-Source**             |          🎙️ **Always-On Audio**          |       🔁 **Studio Mode**       |
+| :-----------------------------------------------: | :--------------------------------------: | :----------------------------: |
+| MIT licensed. No subscriptions, no per-MB fees, ever. | Local monitor never cuts when going live. | Music queue, carts, ducking, crossfade. |
+
+|        📦 **Self-Contained**         |         🖥️ **Truly Cross-Platform**         |        🌍 **i18n FR / EN**         |
+| :----------------------------------: | :-----------------------------------------: | :--------------------------------: |
+| ffmpeg bundled. No install required. | Native macOS, Windows, Linux. No Electron.  | French & English. Easy to extend.  |
+
+---
+
+## ⬇️ Quick Start
+
+Download the latest build for your platform from the [Releases](https://github.com/Synapsr/Aircast/releases/latest) page:
+
+| Platform                  | File                                       | Notes                                                      |
+| ------------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| 🍎 **macOS** (Apple Silicon) | `Aircast_<version>_aarch64.dmg`           | Drag into Applications. First launch: right-click → Open.  |
+| 🍎 **macOS** (Intel)         | `Aircast_<version>_x64.dmg`               | Same as above.                                             |
+| 🪟 **Windows** (portable)    | `Aircast-portable-windows-x64.zip`        | **No install, no admin.** Extract, double-click `Aircast.exe`. |
+| 🪟 **Windows** (installer)   | `Aircast_<version>_x64-setup.exe`         | NSIS installer. Per-user, no admin prompt.                 |
+| 🐧 **Linux**                  | `aircast_<version>_amd64.deb` / `.AppImage` | Standard Debian package or self-contained AppImage.        |
+
+> 🪟 **Windows note**: requires the WebView2 runtime, included by default on Windows 10 1803+ and Windows 11. On older versions, install it from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+That's it. Pick your microphone, enter your Icecast server in **Setup**, click **Go Live**.
+
+---
+
+## ✨ Features
+
+### 📡 Streaming
+
+|     | Feature                  | Description                                                                              |
+| :-: | ------------------------ | ---------------------------------------------------------------------------------------- |
+| ⚙️  | **Server presets**       | Save and recall as many Icecast servers as you need (host, port, mount, codec, bitrate). |
+| 🔌  | **Any input device**     | Built-in mic, USB interface, virtual cable — anything the OS exposes.                    |
+| 🎚️  | **Live VU meter**        | Real-time RMS + peak monitoring at 20 Hz.                                                |
+| 🔁  | **Auto-reconnect**       | Configurable retry interval; instant fail-over on network blips.                         |
+| 🚨  | **Clear errors**         | Auth, mount, network and timeout errors are classified into actionable messages.         |
+| 🎧  | **Codecs**               | MP3 (libmp3lame) and AAC (native), 64–320 kbps.                                          |
+| 🌐  | **Icecast 2.4+**         | HTTP PUT protocol — supports root mount path `/`, unlike the legacy `icecast://`.        |
+
+### 🎛️ Studio Mode
+
+|     | Feature                  | Description                                                                                  |
+| :-: | ------------------------ | -------------------------------------------------------------------------------------------- |
+| 🎵  | **Music queue**          | Drag in MP3/WAV/FLAC/OGG. Play, pause, reorder, remove. Stream-decoded, low memory.          |
+| 🎚️  | **Cart bank**            | 12 jingle slots, one-shot trigger, pre-decoded for instant playback.                         |
+| 🎙️  | **Mic ducking**          | Music ramps down automatically when the mic opens. Configurable level and ramp time.        |
+| 🔄  | **Crossfade**            | Smooth transitions between tracks with a configurable duration.                              |
+| 🎼  | **Format-agnostic**      | Custom `FrameResampler` handles any source rate (22 / 44.1 / 48 / 96 kHz, mono or stereo).    |
+
+### 🛠️ Reliability
+
+|     | Feature                  | Description                                                                                |
+| :-: | ------------------------ | ------------------------------------------------------------------------------------------ |
+| 🧪  | **118 unit tests**       | 81 Rust + 37 TypeScript covering audio, networking, presets, validation and i18n parity.   |
+| 🔒  | **Atomic preset writes** | Corrupt JSON falls back to defaults — never bricks the app.                                |
+| 🪶  | **Lock-free callbacks**  | cpal real-time path uses only atomics + ring buffers. No allocation, no locking.           |
+| 📊  | **Structured logging**   | Every component logs through `log` with adjustable level via `RUST_LOG`.                   |
+| 🌐  | **Deep links**           | `aircast://` URL scheme to share server configurations.                                    |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌───────────────────────────┐                       ┌──────────────────────────────┐
+│  React + TypeScript UI    │ ── tauri::invoke ──►  │  Rust backend (Tauri 2)       │
+│  Tailwind v4, FR/EN i18n  │ ◄── tauri events ───  │   audio::capture (cpal)       │
+└───────────────────────────┘                       │   studio::mixer + resampler   │
+                                                    │   stream::pipeline            │
+                                                    │   presets::store              │
+                                                    └────────────────┬──────────────┘
+                                                                     │ stdin (s16le PCM)
+                                                                     ▼
+                                                    ┌──────────────────────────────┐
+                                                    │  ffmpeg sidecar (subprocess) │
+                                                    │   HTTP PUT → Icecast 2.4+    │
+                                                    └──────────────────────────────┘
+```
+
+Capture is **always-on** as soon as a device is selected. The streaming pipeline taps into the same audio flow without restarting it — switching live → idle never cuts the local monitor.
+
+Full design notes in [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## 🛠️ Build from Source
+
+Want to hack on it?
+
+```bash
+# Prerequisites: Rust (stable), Node 20+, pnpm 9+
+git clone https://github.com/Synapsr/Aircast.git
+cd Aircast
 pnpm install
-pnpm tauri dev
+pnpm fetch-ffmpeg          # downloads the ffmpeg sidecar for your host
+pnpm tauri dev             # runs the app in dev mode
 ```
 
-The window opens. Pick your microphone. Click ⚙ **Setup** to enter your Icecast details, save a preset, then close the modal. Click **Go Live**.
+To produce installable bundles for your host platform:
 
-### Building for distribution (.dmg / .exe / .AppImage)
-
-This bundles a static LGPL ffmpeg next to the app so end users don't need to install anything.
-
-```sh
-pnpm install
-pnpm build:bundle      # = pnpm fetch-ffmpeg && pnpm tauri build --config src-tauri/tauri.bundle.conf.json
+```bash
+pnpm build:bundle          # → src-tauri/target/release/bundle/...
 ```
 
-`pnpm fetch-ffmpeg` downloads the appropriate ffmpeg static build for your host platform from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) (LGPL variant) and places it at `src-tauri/binaries/ffmpeg-<rust-target-triple>`. The Tauri bundler then includes it in the app artifact.
+CI builds for **macOS (arm64 + x64)**, **Windows** and **Linux** are produced automatically on every git tag — see [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
-For multi-platform release builds, run the equivalent steps inside platform-specific CI jobs.
+---
 
-## Architecture
+## 🤝 Contributing
 
-```
-┌─────────────────┐                       ┌─────────────────────┐
-│ React (Vite)    │ ── tauri::invoke ──→  │ Rust (Tauri 2)      │
-│ TS + Tailwind   │ ←── tauri events ──── │  audio (cpal)       │
-└─────────────────┘                       │  stream::pipeline   │
-                                          │  presets::store     │
-                                          └─────────┬───────────┘
-                                                    │ stdin
-                                                    ▼
-                                          ┌─────────────────────┐
-                                          │ ffmpeg (subprocess) │
-                                          │  -f f32le -i pipe:0 │
-                                          │  → libmp3lame/aac   │
-                                          │  → icecast://…      │
-                                          └─────────────────────┘
+PRs are welcome. Read [`docs/contributing.md`](docs/contributing.md) first — it covers local checks, style and the architecture invariants that came from real bugs. Don't break those without saying why.
+
+The local check suite that CI runs on every PR:
+
+```bash
+cd src-tauri
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --lib
+cd ..
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-- **`audio/capture.rs`** — opens a `cpal` stream on the chosen device, hands raw `f32` samples to a consumer callback. Single thread, drop-to-stop semantics.
-- **`vu.rs`** — RMS+peak emitter, throttled to ~20 Hz, emits the `vu-meter` event.
-- **`stream/pipeline.rs`** — orchestrator. Owns a `CaptureSession` and an `FfmpegProcess`. Handles connect → live → reconnect → idle as a state machine. Emits `stream-status` events.
-- **`stream/ffmpeg.rs`** — subprocess management. `tokio::process::Command` spawn, stdin pump (bounded mpsc, drop-on-full to avoid back-pressure freezes), stderr line parsing for status detection (`progress=continue` ⇒ live; auth/refused/timeout strings ⇒ structured error message).
-- **`stream/ffmpeg_path.rs`** — locates the ffmpeg binary: bundled sidecar first, system `PATH` fallback.
-- **`presets/store.rs`** — atomic-write JSON file at `<app_data_dir>/aircast.json` with `currentConfig`, `presets`, `settings`.
+---
 
-The frontend is split between presentational components (`DeviceSelector`, `VuMeter`, `StatusBadge`, `GoLiveButton`, `ServerForm`, `PresetManager`) and a single `App.tsx` shell that wires hooks (`useCurrentConfig`, `useSettings`, `usePresets`, `useStreamStatus`, `useVuLevel`) to the Rust commands.
+## 📜 License
 
-## How streaming works under the hood
+- **Aircast source** — MIT, see [`LICENSE`](LICENSE).
+- **Bundled ffmpeg** — LGPL static build. Aircast spawns ffmpeg as a separate subprocess, so under the FSF "mere aggregation" interpretation, ffmpeg's license does not propagate to Aircast's source.
 
-1. Frontend calls `start_stream(config)`.
-2. Rust resolves the device's native sample rate + channel count (cpal `default_input_config`).
-3. ffmpeg is spawned with: `-f f32le -ar SR -ac CH -i pipe:0 -codec:a libmp3lame -b:a Nk -content_type audio/mpeg -f mp3 -progress pipe:2 icecast://user:pass@host:port/mount`.
-4. A cpal capture session is started; its callback converts each `f32` sample to little-endian bytes and `try_send`s them into a bounded tokio channel feeding ffmpeg's stdin. (If the channel is full, the chunk is dropped — better a glitch than a freeze.)
-5. The pipeline polls ffmpeg's `became_live` flag (set by the stderr parser on the first `progress=continue`); on flip, it emits `StreamStatus::Live` to the frontend.
-6. On unexpected ffmpeg exit, the pipeline emits `Reconnecting { nextAttemptInMs }` and retries after the configured delay. On user `stop_stream` or with reconnect set to 0, it emits `Idle` and exits cleanly.
+---
 
-## Project layout
+<div align="center">
 
-```
-Aircast/
-├── PLAN.md                       Implementation plan & roadmap (delete once stable)
-├── README.md
-├── LICENSE                       MIT
-├── package.json
-├── vite.config.ts
-├── tsconfig.json
-├── tailwind v4 (config in src/styles.css via @theme)
-├── index.html
-├── scripts/
-│   └── fetch-ffmpeg.mjs          Downloads LGPL ffmpeg for the host platform
-├── public/
-├── src/                          Frontend (React + TS)
-│   ├── main.tsx
-│   ├── App.tsx
-│   ├── styles.css
-│   ├── types.ts
-│   ├── lib/api.ts
-│   ├── hooks/
-│   │   ├── useStreamStatus.ts
-│   │   ├── useCurrentConfig.ts
-│   │   ├── useSettings.ts
-│   │   ├── usePresets.ts
-│   │   └── useVuLevel.ts
-│   └── components/
-│       ├── SimpleMode.tsx
-│       ├── SettingsModal.tsx
-│       ├── DeviceSelector.tsx
-│       ├── ServerForm.tsx
-│       ├── PresetManager.tsx
-│       ├── StatusBadge.tsx
-│       ├── GoLiveButton.tsx
-│       └── VuMeter.tsx
-└── src-tauri/                    Backend (Rust)
-    ├── Cargo.toml
-    ├── tauri.conf.json
-    ├── tauri.bundle.conf.json    Override that adds the ffmpeg sidecar at bundle time
-    ├── Info.plist                Adds NSMicrophoneUsageDescription on macOS
-    ├── binaries/                 (gitignored) where fetch-ffmpeg places the sidecar
-    ├── icons/
-    ├── capabilities/default.json
-    └── src/
-        ├── main.rs
-        ├── lib.rs
-        ├── commands.rs
-        ├── error.rs
-        ├── state.rs
-        ├── vu.rs
-        ├── audio/
-        │   ├── mod.rs
-        │   ├── devices.rs
-        │   └── capture.rs
-        ├── presets/
-        │   ├── mod.rs
-        │   └── store.rs
-        └── stream/
-            ├── mod.rs
-            ├── pipeline.rs
-            ├── ffmpeg.rs
-            ├── ffmpeg_path.rs
-            └── status.rs
-```
+Made with ♥ for radio operators by [Synapsr](https://github.com/Synapsr).
 
-## Contributing
-
-PRs welcome. Before opening one:
-
-1. Run `cargo fmt` in `src-tauri/` and `pnpm build` at the repo root — both must succeed without warnings.
-2. Test the change in `pnpm tauri dev` against a real Icecast (the Docker one-liner above works).
-3. Keep `PLAN.md` honest if your change shifts the roadmap.
-
-If you're adding to **Studio mode**, prefer creating new modules (`music/`, `cartoucheur/`, `mixer/`) rather than expanding `stream/pipeline.rs`. Simple mode must stay tiny.
-
-## Licensing
-
-- **Aircast source:** MIT (see [`LICENSE`](LICENSE)).
-- **Bundled ffmpeg:** static LGPL build from BtbN, downloaded at packaging time. Aircast spawns ffmpeg as a separate process via stdin/stdout — under the FSF's "mere aggregation" interpretation, this does not propagate ffmpeg's license to Aircast's source. Distribution must include ffmpeg's license alongside (the LGPL build's `LICENSE.txt` is preserved in `src-tauri/binaries/` after `fetch-ffmpeg`).
-- **Tauri, React, cpal**, etc.: see each crate/package's own license.
-
-## Acknowledgements
-
-The Studio-mode roadmap takes inspiration from [MyRadiomatisme](https://www.radiomatisme.fr/) — credit to its design for the layout primitives (now-playing + playlist queue + cartoucheur + mic toggle).
+</div>
