@@ -122,7 +122,11 @@
     "crossfade": "Crossfade between tracks",
     "crossfadeHint": "Smoothly blend the previous track into the next when you skip.",
     "secondsShort": "s",
-    "off": "Off"
+    "off": "Off",
+    "diagnosticHint": "Stuck on something? Copy a diagnostic report (version, devices, recent errors and the last 300 log lines) and paste it into a bug report.",
+    "diagnosticCopy": "Copy diagnostic report",
+    "diagnosticCopied": "Diagnostic copied to clipboard",
+    "diagnosticFailed": "Could not copy diagnostic"
   },
   "link": {
     "title": "Add server from link",

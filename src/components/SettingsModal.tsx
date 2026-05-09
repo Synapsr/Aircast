@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Globe, Link2, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ClipboardCheck, ClipboardCopy, Globe, Link2, Plus, Trash2, X } from "lucide-react";
 import { ServerForm } from "@/components/ServerForm";
 import { usePresets } from "@/hooks/usePresets";
 import { useT } from "@/i18n/context";
@@ -318,6 +318,13 @@ export function SettingsModal({
                         className="rounded-lg bg-zinc-800 px-3.5 py-2.5 text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
                       />
                     </label>
+
+                    <div className="mt-1 flex flex-col gap-1.5 border-t border-zinc-800 pt-4">
+                      <span className="text-xs text-zinc-500">
+                        {t("settings.diagnosticHint")}
+                      </span>
+                      <DiagnosticCopyButton />
+                    </div>
                   </div>
                 )}
               </section>
@@ -522,6 +529,56 @@ function LanguagePicker({
         </button>
       ))}
     </div>
+  );
+}
+
+function DiagnosticCopyButton() {
+  const { t } = useT();
+  const [state, setState] = useState<"idle" | "copied" | "error">("idle");
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  async function handleClick() {
+    try {
+      const bundle = await api.getDiagnosticBundle();
+      await navigator.clipboard.writeText(bundle);
+      setState("copied");
+    } catch {
+      setState("error");
+    }
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setState("idle"), 2200);
+  }
+
+  const Icon = state === "copied" ? ClipboardCheck : ClipboardCopy;
+  const label =
+    state === "copied"
+      ? t("settings.diagnosticCopied")
+      : state === "error"
+        ? t("settings.diagnosticFailed")
+        : t("settings.diagnosticCopy");
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={[
+        "flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+        state === "copied"
+          ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+          : state === "error"
+            ? "bg-red-500/15 text-red-300 ring-1 ring-red-500/30"
+            : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700",
+      ].join(" ")}
+    >
+      <Icon className="h-4 w-4" />
+      <span>{label}</span>
+    </button>
   );
 }
 

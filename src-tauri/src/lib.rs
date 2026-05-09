@@ -22,13 +22,37 @@ pub fn run() {
             let handle = app.handle();
 
             // Register the log plugin first so AppState::new boot logs are captured.
-            if cfg!(debug_assertions) {
-                handle.plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // We write to BOTH stdout (visible during dev) and a rotating file
+            // in the OS log directory (always available in release for support).
+            //
+            // macOS:   ~/Library/Logs/com.aircast.app/Aircast.log
+            // Windows: %LOCALAPPDATA%\com.aircast.app\logs\Aircast.log
+            // Linux:   ~/.local/share/com.aircast.app/logs/Aircast.log
+            //
+            // The "Copy diagnostic" button in Setup → Advanced reads the latest
+            // file content, so users can paste a clean report into an issue.
+            handle.plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .targets([
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                            file_name: Some("Aircast".into()),
+                        }),
+                    ])
+                    .max_file_size(5 * 1024 * 1024) // 5 MB per file
+                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                    .build(),
+            )?;
+            log::info!(
+                "Aircast {} starting ({})",
+                env!("CARGO_PKG_VERSION"),
+                if cfg!(debug_assertions) {
+                    "debug"
+                } else {
+                    "release"
+                }
+            );
 
             let app_state = AppState::new(handle)
                 .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
@@ -110,6 +134,7 @@ pub fn run() {
             commands::cart_stop,
             commands::cart_snapshot,
             commands::open_external,
+            commands::get_diagnostic_bundle,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

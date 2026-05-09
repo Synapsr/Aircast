@@ -171,9 +171,10 @@ async fn stderr_reader(stderr: tokio::process::ChildStderr, status: Arc<FfmpegSt
     let mut lines = reader.lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
-        // ffmpeg outputs many progress lines per second; kept at debug so
-        // production runs don't spam the terminal. Set RUST_LOG=debug to
-        // see the raw ffmpeg output for diagnostics.
+        // ffmpeg outputs many progress lines per second; raw lines stay at
+        // debug so production runs don't spam. Errors that we classify get
+        // promoted to error-level so they land in the diagnostic log even
+        // at the default info filter.
         log::debug!("ffmpeg: {line}");
 
         {
@@ -186,12 +187,15 @@ async fn stderr_reader(stderr: tokio::process::ChildStderr, status: Arc<FfmpegSt
 
         if !status.became_live.load(Ordering::Relaxed) && is_progress_line(&line) {
             status.became_live.store(true, Ordering::Relaxed);
+            log::info!("ffmpeg: live (encoder is producing output)");
         }
 
         if let Some(err) = classify_error(&line) {
+            log::error!("ffmpeg classified error: {err} (raw: {line})");
             *status.last_error.lock().unwrap() = Some(err);
         }
     }
+    log::info!("ffmpeg stderr stream closed");
 }
 
 fn is_progress_line(line: &str) -> bool {

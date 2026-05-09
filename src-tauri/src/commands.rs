@@ -87,12 +87,30 @@ pub async fn start_stream(
 ) -> AppResult<()> {
     let mut stream_guard = state.stream.lock().await;
     if let Some(old) = stream_guard.take() {
+        log::info!("start_stream: stopping previous stream first");
         old.stop().await;
     }
 
     let format = state.capture_ctx.format().ok_or_else(|| {
+        log::error!("start_stream rejected: no input device active");
         AppError::Stream("No input device active. Pick a microphone first.".into())
     })?;
+
+    let mount_display = if config.mount.starts_with('/') {
+        config.mount.clone()
+    } else {
+        format!("/{}", config.mount)
+    };
+    log::info!(
+        "start_stream: target={}:{}{} codec={:?}@{}kbps source={}Hz/{}ch",
+        config.host,
+        config.port,
+        mount_display,
+        config.format,
+        config.bitrate,
+        format.sample_rate,
+        format.channels,
+    );
 
     let settings = state.presets.settings();
     let handle = stream::start(
@@ -109,6 +127,7 @@ pub async fn start_stream(
 
 #[tauri::command]
 pub async fn stop_stream(state: tauri::State<'_, AppState>, app: AppHandle) -> AppResult<()> {
+    log::info!("stop_stream: requested");
     let mut stream_guard = state.stream.lock().await;
     if let Some(handle) = stream_guard.take() {
         handle.stop().await;
@@ -456,6 +475,199 @@ pub fn cart_snapshot(state: tauri::State<'_, AppState>) -> AppResult<Vec<CartSna
         .lock()
         .map_err(|_| AppError::Stream("carts lock poisoned".into()))?
         .snapshot())
+}
+
+// ──────────────────── diagnostics ────────────────────
+
+/// Build a single-shot diagnostic bundle: app metadata, host environment,
+/// active audio/streaming context, the last classified stream error and the
+/// tail of the rolling log file. The frontend exposes this as a "Copy
+/// diagnostic" button so a non-technical user can paste a clean report
+/// into a bug report or email.
+///
+/// Credentials are masked. The mount path is included verbatim because it
+/// rarely contains a secret and it's load-bearing for diagnosing failures.
+#[tauri::command]
+pub fn get_diagnostic_bundle(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<String> {
+    use std::fmt::Write;
+
+    let mut s = String::new();
+
+    // ── header ──
+    let _ = writeln!(s, "Aircast {} diagnostic", env!("CARGO_PKG_VERSION"));
+    let _ = writeln!(
+        s,
+        "Build: {}  ·  Target: {}/{}",
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    );
+    let now = chrono_like_now();
+    let _ = writeln!(s, "Generated: {now}");
+
+    // ── audio capture ──
+    s.push_str("\n=== Audio ===\n");
+    if let Some(format) = state.capture_ctx.format() {
+        let _ = writeln!(
+            s,
+            "Active format: {} Hz, {} ch",
+            format.sample_rate, format.channels
+        );
+    } else {
+        s.push_str("Active format: (none — no input device selected)\n");
+    }
+
+    // ── streaming config (sanitized) ──
+    s.push_str("\n=== Active server (sanitized) ===\n");
+    if let Some(cfg) = state.presets.current_config() {
+        let _ = writeln!(s, "host: {}", cfg.host);
+        let _ = writeln!(s, "port: {}", cfg.port);
+        let _ = writeln!(s, "mount: {}", cfg.mount);
+        let _ = writeln!(s, "username: {}", cfg.username);
+        let _ = writeln!(
+            s,
+            "password: {}",
+            if cfg.password.is_empty() {
+                "(empty)"
+            } else {
+                "(set, masked)"
+            }
+        );
+        let _ = writeln!(s, "format: {:?}", cfg.format);
+        let _ = writeln!(s, "bitrate: {} kbps", cfg.bitrate);
+        let _ = writeln!(s, "device id: {}", cfg.device_id);
+    } else {
+        s.push_str("(no active server config)\n");
+    }
+
+    // ── settings (relevant subset) ──
+    s.push_str("\n=== Settings ===\n");
+    let st = state.presets.settings();
+    let _ = writeln!(
+        s,
+        "reconnect_interval_seconds: {}",
+        st.reconnect_interval_seconds
+    );
+    let _ = writeln!(
+        s,
+        "music_volume_when_mic_open: {:.2}",
+        st.music_volume_when_mic_open
+    );
+    let _ = writeln!(s, "crossfade_seconds: {:.2}", st.crossfade_seconds);
+    let _ = writeln!(s, "language: {}", st.language);
+    let _ = writeln!(s, "mode: {:?}", state.presets.mode());
+
+    // ── last stream error (if any) ──
+    s.push_str("\n=== Last stream error ===\n");
+    if let Ok(slot) = state.last_stream_error.lock() {
+        if let Some(err) = slot.as_ref() {
+            let secs_ago = err.at.elapsed().map(|d| d.as_secs()).unwrap_or(0);
+            let _ = writeln!(s, "{}s ago: {}", secs_ago, err.message);
+            if let Some(d) = &err.details {
+                s.push_str("--- ffmpeg tail ---\n");
+                s.push_str(d);
+                s.push('\n');
+            }
+        } else {
+            s.push_str("(none)\n");
+        }
+    }
+
+    // ── log tail ──
+    s.push_str("\n=== Recent log (last 300 lines) ===\n");
+    match read_log_tail(&app, 300) {
+        Ok(lines) if !lines.is_empty() => s.push_str(&lines),
+        Ok(_) => s.push_str("(log file is empty)\n"),
+        Err(e) => {
+            let _ = writeln!(s, "(could not read log file: {e})");
+        }
+    }
+
+    Ok(s)
+}
+
+/// Read up to `max_lines` from the end of the rolling log file. Tries the
+/// canonical Tauri log directory first; falls back gracefully when the
+/// file doesn't exist yet (e.g. fresh install with no errors).
+fn read_log_tail(app: &AppHandle, max_lines: usize) -> std::io::Result<String> {
+    use tauri::Manager;
+    let log_dir = app.path().app_log_dir().map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("app_log_dir unavailable: {e}"),
+        )
+    })?;
+    let log_file = log_dir.join("Aircast.log");
+    if !log_file.exists() {
+        return Ok(format!("(no log file yet at {})\n", log_file.display()));
+    }
+    let contents = std::fs::read_to_string(&log_file)?;
+    let lines: Vec<&str> = contents.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    Ok(lines[start..].join("\n") + "\n")
+}
+
+/// Tiny ISO-8601-ish UTC formatter so we don't pull in chrono just for the
+/// diagnostic header. Format: `2026-05-09 14:32:07 UTC`.
+fn chrono_like_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let (y, m, d, hh, mm, ss) = epoch_to_ymdhms(secs);
+    format!("{y:04}-{m:02}-{d:02} {hh:02}:{mm:02}:{ss:02} UTC")
+}
+
+/// Convert seconds-since-epoch to (year, month, day, hour, minute, second)
+/// in UTC. Handles dates well past 2099.
+fn epoch_to_ymdhms(secs: u64) -> (u32, u32, u32, u32, u32, u32) {
+    let mut day = (secs / 86_400) as i64;
+    let ss = (secs % 60) as u32;
+    let mm = ((secs / 60) % 60) as u32;
+    let hh = ((secs / 3_600) % 24) as u32;
+    // 1970-01-01 = day 0
+    let mut year: i64 = 1970;
+    loop {
+        let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        let len = if leap { 366 } else { 365 };
+        if day < len {
+            break;
+        }
+        day -= len;
+        year += 1;
+    }
+    let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    let months = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut month: i64 = 1;
+    for &len in &months {
+        if day < len {
+            break;
+        }
+        day -= len;
+        month += 1;
+    }
+    (year as u32, month as u32, (day + 1) as u32, hh, mm, ss)
 }
 
 // ──────────────────── external links ────────────────────

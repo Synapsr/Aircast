@@ -42,12 +42,24 @@ impl CaptureContext {
     }
 }
 
+/// The most recent stream error, kept around even after the stream stops so
+/// the diagnostic bundle can include it. Cleared once a new live cycle
+/// reaches the Live state (no point reporting a successfully-recovered
+/// transient error).
+#[derive(Debug, Clone)]
+pub struct LastStreamError {
+    pub message: String,
+    pub details: Option<String>,
+    pub at: std::time::SystemTime,
+}
+
 pub struct AppState {
     pub mixer: Arc<Mixer>,
     pub capture: Mutex<Option<CaptureSession>>,
     pub capture_ctx: CaptureContext,
     pub stream: tokio::sync::Mutex<Option<StreamHandle>>,
     pub presets: PresetStore,
+    pub last_stream_error: Arc<Mutex<Option<LastStreamError>>>,
     #[allow(dead_code)]
     monitor: Mutex<Option<MonitorSession>>,
 }
@@ -77,6 +89,7 @@ impl AppState {
             capture_ctx,
             stream: tokio::sync::Mutex::new(None),
             presets: PresetStore::new(app)?,
+            last_stream_error: Arc::new(Mutex::new(None)),
             monitor: Mutex::new(monitor),
         })
     }

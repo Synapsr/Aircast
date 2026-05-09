@@ -134,4 +134,9 @@ export const api = {
   openExternal(url: string): Promise<void> {
     return invoke("open_external", { url });
   },
+
+  // ───── diagnostics ─────
+  getDiagnosticBundle(): Promise<string> {
+    return invoke("get_diagnostic_bundle");
+  },
 };

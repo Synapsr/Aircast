@@ -1,12 +1,12 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::sync::oneshot;
 
 use crate::audio::capture::AudioFormat;
 use crate::presets::{Settings, StreamConfig};
-use crate::state::CaptureContext;
+use crate::state::{AppState, CaptureContext, LastStreamError};
 use crate::stream::ffmpeg::{is_fatal_error, FfmpegProcess};
 use crate::stream::status::{emit, StreamStatus};
 
@@ -66,14 +66,34 @@ async fn run(
     mut stop_rx: oneshot::Receiver<()>,
 ) {
     loop {
+        log::info!("stream pipeline: connecting");
         emit(&app, StreamStatus::Connecting);
 
         match run_one_attempt(&app, &config, format, &capture_ctx, &mut stop_rx).await {
             AttemptOutcome::Stopped => {
+                log::info!("stream pipeline: stopped by user");
                 emit(&app, StreamStatus::Idle);
                 return;
             }
             AttemptOutcome::Failed { message, details } => {
+                log::error!(
+                    "stream pipeline: attempt failed — {message}{}",
+                    details
+                        .as_ref()
+                        .map(|d| format!("\n--- ffmpeg tail ---\n{d}"))
+                        .unwrap_or_default()
+                );
+                // Persist the last error in AppState so the diagnostic
+                // bundle can include it even after the stream loop exits.
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Ok(mut slot) = state.last_stream_error.lock() {
+                        *slot = Some(LastStreamError {
+                            message: message.clone(),
+                            details: details.clone(),
+                            at: std::time::SystemTime::now(),
+                        });
+                    }
+                }
                 // Always surface the actual ffmpeg/server message so the user
                 // can see *why* the connection failed. The frontend keeps the
                 // last error around in its own state, so a follow-up
@@ -87,9 +107,21 @@ async fn run(
                 );
 
                 if is_fatal_error(&message) || settings.reconnect_interval_seconds == 0 {
+                    log::info!(
+                        "stream pipeline: not reconnecting ({})",
+                        if is_fatal_error(&message) {
+                            "fatal error"
+                        } else {
+                            "auto-reconnect disabled"
+                        }
+                    );
                     return;
                 }
 
+                log::info!(
+                    "stream pipeline: reconnecting in {}s",
+                    settings.reconnect_interval_seconds
+                );
                 emit(
                     &app,
                     StreamStatus::Reconnecting {
@@ -103,6 +135,7 @@ async fn run(
 
                 tokio::select! {
                     _ = &mut stop_rx => {
+                        log::info!("stream pipeline: stopped during reconnect wait");
                         emit(&app, StreamStatus::Idle);
                         return;
                     }
@@ -171,6 +204,13 @@ async fn run_one_attempt(
             _ = &mut live_check => {
                 if !announced_live && status.became_live.load(Ordering::Acquire) {
                     announced_live = true;
+                    log::info!("stream pipeline: live");
+                    // Clear any leftover error now that we're healthy again.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        if let Ok(mut slot) = state.last_stream_error.lock() {
+                            *slot = None;
+                        }
+                    }
                     emit(app, StreamStatus::Live);
                 }
                 if !announced_live

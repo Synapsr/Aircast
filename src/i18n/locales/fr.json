@@ -122,7 +122,11 @@
     "crossfade": "Fondu entre les morceaux",
     "crossfadeHint": "Enchaîne en douceur le morceau précédent et le suivant.",
     "secondsShort": "s",
-    "off": "Off"
+    "off": "Off",
+    "diagnosticHint": "Un souci ? Copie un rapport de diagnostic (version, devices, dernières erreurs et 300 lignes de log) à coller dans ton report de bug.",
+    "diagnosticCopy": "Copier le rapport de diagnostic",
+    "diagnosticCopied": "Diagnostic copié dans le presse-papier",
+    "diagnosticFailed": "Impossible de copier le diagnostic"
   },
   "link": {
     "title": "Ajouter un serveur depuis un lien",
