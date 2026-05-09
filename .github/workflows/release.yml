@@ -99,17 +99,11 @@ jobs:
 
       - name: Build Tauri bundle
         run: pnpm tauri build --config src-tauri/tauri.bundle.conf.json --target ${{ matrix.target }}
-        env:
-          # macOS code signing (skipped if secrets are not set).
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # Tauri updater signing (optional).
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # Code-signing env vars are intentionally not set: Tauri tries to
+        # `security import` whenever APPLE_CERTIFICATE exists, even empty,
+        # which fails. When real signing certs are configured later, add
+        # them via a dedicated step that only runs when the matching
+        # secrets are present.
 
       # Portable Windows zip: aircast.exe + ffmpeg.exe side-by-side, no install,
       # no admin. Just extract and run. Requires WebView2 runtime on the host
