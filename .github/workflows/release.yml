@@ -27,12 +27,11 @@ jobs:
             artifact_glob: |
               src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
               src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
-          - label: macOS (Intel)
-            os: macos-13
-            target: x86_64-apple-darwin
-            artifact_glob: |
-              src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-              src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app.tar.gz
+          # macOS Intel build is intentionally omitted: GitHub's macos-13
+          # runners are queue-starved during the Apple Silicon transition,
+          # blocking the release for hours. Intel Macs can still run the
+          # arm64 DMG via Rosetta 2. Add x86_64-apple-darwin back here
+          # once we have local signing and run it off-CI.
           - label: Windows (x64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
