@@ -190,3 +190,17 @@ pnpm build
 Made with ♥ for radio operators by [Synapsr](https://github.com/Synapsr).
 
 </div>
+
+---
+
+<div align="center">
+
+### With the support of
+
+<a href="https://culturesnumeriques.ac-rennes.fr/spip.php?rubrique80">
+  <img src="https://podeduc.apps.education.fr/media/files/be7df5511bc2365fa61ea304696e5c777a2153718e3a30007267ed7d9e4c8f42/banniereinstitdynamique_N7Kkcgu.png" alt="DRANE Bretagne" width="640" />
+</a>
+
+<sub>Companion to the DRANE project [Porte-Voix.app](https://porte-voix.app/)</sub>
+
+</div>
