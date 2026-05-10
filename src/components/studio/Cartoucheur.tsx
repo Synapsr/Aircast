@@ -4,7 +4,11 @@ import { api } from "@/lib/api";
 import { useT } from "@/i18n/context";
 import type { CartSnapshot } from "@/types";
 
-const CART_COUNT = 12;
+// 3×3 grid keeps the right column shorter so it lines up with the music
+// queue on the left rather than overflowing past it. Backend persists slots
+// by index so existing slots 10-12 in user data simply stay hidden until a
+// future release brings them back.
+const CART_COUNT = 9;
 
 interface Props {
   carts: CartSnapshot[];

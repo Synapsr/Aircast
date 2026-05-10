@@ -7,6 +7,8 @@ mod stream;
 mod studio;
 mod vu;
 
+use std::time::Duration;
+
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -73,7 +75,70 @@ pub fn run() {
                 }
             }
 
+            // Push restored metadata settings to the updater before any
+            // stream may start. SetTarget(None) keeps it dormant.
+            let _ = app_state
+                .metadata_tx
+                .try_send(stream::metadata::Command::SetSettings(s.metadata.clone()));
+
+            // If the user persisted File mode with a path, boot the watcher
+            // immediately so the file content is already available when the
+            // user clicks Go Live.
+            if matches!(s.metadata.mode, presets::MetadataMode::File) {
+                if let Some(path) = s.metadata.file_path.clone() {
+                    let handle = stream::metadata::spawn_file_watcher(
+                        path,
+                        s.metadata.file_poll_secs,
+                        app_state.metadata_file_content.clone(),
+                    );
+                    *app_state.metadata_file_watcher.lock().unwrap() = Some(handle);
+                }
+            }
+
             app.manage(app_state);
+
+            // ── State poller for the metadata updater ─────────────────────
+            // Every ~750 ms, snapshot music + cart + mic + file content and
+            // send a Tick so the updater can recompute and push if changed.
+            // 750 ms is the longest a listener tolerates between a track
+            // change and seeing the new title without feeling sluggish.
+            let app_for_poller = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_millis(750));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    interval.tick().await;
+                    let Some(state) = app_for_poller.try_state::<AppState>() else {
+                        continue;
+                    };
+                    let stream_live = state
+                        .stream_status
+                        .lock()
+                        .map(|s| s.is_live())
+                        .unwrap_or(false);
+                    let music = state.mixer.music.lock().map(|m| m.snapshot()).ok();
+                    let carts = state
+                        .mixer
+                        .carts
+                        .lock()
+                        .map(|c| c.snapshot())
+                        .unwrap_or_default();
+                    let mic_open = state.mixer.is_mic_open();
+                    let file_content = state.metadata_file_content.lock().await.clone();
+                    if let Some(music) = music {
+                        let input = stream::metadata::build_compose_input(
+                            &music,
+                            &carts,
+                            mic_open,
+                            file_content,
+                            stream_live,
+                        );
+                        let _ = state
+                            .metadata_tx
+                            .try_send(stream::metadata::Command::Tick(Box::new(input)));
+                    }
+                }
+            });
 
             // Forward deep-link URLs to the frontend.
             let handle_for_links = app.handle().clone();
@@ -135,6 +200,7 @@ pub fn run() {
             commands::cart_snapshot,
             commands::open_external,
             commands::get_diagnostic_bundle,
+            commands::push_metadata_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

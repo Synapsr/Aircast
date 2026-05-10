@@ -7,6 +7,8 @@ use crate::audio::capture::{AudioFormat, CaptureSession};
 use crate::audio::playback::{self, MonitorSession};
 use crate::error::AppResult;
 use crate::presets::store::PresetStore;
+use crate::stream::metadata;
+use crate::stream::status::StreamStatus;
 use crate::stream::StreamHandle;
 use crate::studio::Mixer;
 
@@ -60,6 +62,20 @@ pub struct AppState {
     pub stream: tokio::sync::Mutex<Option<StreamHandle>>,
     pub presets: PresetStore,
     pub last_stream_error: Arc<Mutex<Option<LastStreamError>>>,
+    /// Latest stream status, kept in sync by [`crate::stream::pipeline`] on
+    /// every emission. Read-only for everyone else; lets the metadata
+    /// updater tell whether the stream is actually live before pushing.
+    pub stream_status: Arc<Mutex<StreamStatus>>,
+    /// Sender to the long-lived metadata updater task. Components send
+    /// `Tick`, `SetTarget`, `SetSettings`, `PushNow` commands here from
+    /// any thread/runtime via `try_send` (non-blocking).
+    pub metadata_tx: mpsc::Sender<metadata::Command>,
+    /// Slot updated by the file-poll watcher (`MetadataMode::File`). The
+    /// state poller reads this each tick to feed `ComposeInput.file_content`.
+    pub metadata_file_content: Arc<tokio::sync::Mutex<Option<String>>>,
+    /// Handle to the currently-running file-poll task, if any. Aborted
+    /// when settings change to `Auto`/`Static` mode or the path changes.
+    pub metadata_file_watcher: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     #[allow(dead_code)]
     monitor: Mutex<Option<MonitorSession>>,
 }
@@ -83,6 +99,12 @@ impl AppState {
             }
         };
 
+        // Metadata updater: long-lived task, lives for the whole process.
+        // Channel is bounded — `Tick`s drop on overflow which is desirable
+        // (one stale tick gets replaced by the next; we don't need a queue).
+        let (metadata_tx, metadata_rx) = mpsc::channel::<metadata::Command>(16);
+        metadata::spawn(app.clone(), metadata_rx);
+
         Ok(Self {
             mixer,
             capture: Mutex::new(None),
@@ -90,6 +112,10 @@ impl AppState {
             stream: tokio::sync::Mutex::new(None),
             presets: PresetStore::new(app)?,
             last_stream_error: Arc::new(Mutex::new(None)),
+            stream_status: Arc::new(Mutex::new(StreamStatus::Idle)),
+            metadata_tx,
+            metadata_file_content: Arc::new(tokio::sync::Mutex::new(None)),
+            metadata_file_watcher: Mutex::new(None),
             monitor: Mutex::new(monitor),
         })
     }

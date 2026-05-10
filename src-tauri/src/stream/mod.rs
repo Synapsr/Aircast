@@ -1,5 +1,6 @@
 pub mod ffmpeg;
 pub mod ffmpeg_path;
+pub mod metadata;
 pub mod pipeline;
 pub mod status;
 

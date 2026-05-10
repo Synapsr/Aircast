@@ -139,4 +139,9 @@ export const api = {
   getDiagnosticBundle(): Promise<string> {
     return invoke("get_diagnostic_bundle");
   },
+
+  // ───── metadata broadcaster ─────
+  pushMetadataNow(title: string | null = null): Promise<void> {
+    return invoke("push_metadata_now", { title });
+  },
 };

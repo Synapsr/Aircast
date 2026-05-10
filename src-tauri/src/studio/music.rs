@@ -14,24 +14,84 @@ use crate::studio::resampler::{map_channels_add, map_channels_set, FrameResample
 pub struct TrackInfo {
     pub id: String,
     pub path: PathBuf,
+    /// Display title — tag-derived when available, otherwise the file stem.
+    /// What the UI shows in the queue.
     pub title: String,
+    /// Tag-derived metadata, used by the Icecast title broadcaster. None when
+    /// the file has no embedded tags or lofty couldn't read them.
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    /// True iff `title` came from an embedded tag, false if it was derived
+    /// from the filename. Mostly diagnostic.
+    pub title_from_tag: bool,
     pub duration_secs: Option<f32>,
 }
 
 impl TrackInfo {
     pub fn from_path(path: PathBuf) -> Self {
-        let title = path
+        let stem = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("Untitled")
             .to_string();
+
+        let tags = read_tags(&path);
+        let title_from_tag = tags.title.is_some();
+        let title = tags.title.clone().unwrap_or(stem);
+
         let duration_secs = probe_duration(&path);
         Self {
             id: Uuid::new_v4().to_string(),
             path,
             title,
+            artist: tags.artist,
+            album: tags.album,
+            title_from_tag,
             duration_secs,
         }
+    }
+}
+
+/// Subset of metadata we use for "now playing" composition. Lofty pulls these
+/// from ID3v2 (mp3), Vorbis comments (flac/ogg/opus), iTunes atoms (mp4) —
+/// pure Rust, no system deps.
+#[derive(Debug, Clone, Default)]
+struct Tags {
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+}
+
+fn read_tags(path: &Path) -> Tags {
+    use lofty::file::TaggedFileExt;
+    use lofty::probe::Probe;
+    use lofty::tag::Accessor;
+
+    let Ok(probe) = Probe::open(path) else {
+        return Tags::default();
+    };
+    let Ok(tagged) = probe.read() else {
+        return Tags::default();
+    };
+    let tag = match tagged.primary_tag() {
+        Some(t) => t,
+        None => match tagged.first_tag() {
+            Some(t) => t,
+            None => return Tags::default(),
+        },
+    };
+    let clean = |s: String| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    };
+    Tags {
+        title: tag.title().map(|c| c.into_owned()).and_then(clean),
+        artist: tag.artist().map(|c| c.into_owned()).and_then(clean),
+        album: tag.album().map(|c| c.into_owned()).and_then(clean),
     }
 }
 
@@ -452,12 +512,18 @@ mod tests {
             id: "a".into(),
             path: "x".into(),
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.enqueue(TrackInfo {
             id: "b".into(),
             path: "y".into(),
             title: "B".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         let snap = p.snapshot();
@@ -473,6 +539,9 @@ mod tests {
             id: "a".into(),
             path: "x".into(),
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         };
         p.enqueue(track);
@@ -484,6 +553,9 @@ mod tests {
             id: "a".into(),
             path: "x".into(),
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         let snap = p.snapshot();
@@ -498,6 +570,9 @@ mod tests {
                 id: id.into(),
                 path: "x".into(),
                 title: id.into(),
+                artist: None,
+                album: None,
+                title_from_tag: false,
                 duration_secs: None,
             });
         }
@@ -514,6 +589,9 @@ mod tests {
                 id: id.into(),
                 path: "x".into(),
                 title: id.into(),
+                artist: None,
+                album: None,
+                title_from_tag: false,
                 duration_secs: None,
             });
         }
@@ -532,6 +610,9 @@ mod tests {
             id: "a".into(),
             path: "x".into(),
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.set_duration_override("a", 42.0);
@@ -567,6 +648,9 @@ mod tests {
             id: "a".into(),
             path,
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.play().unwrap();
@@ -589,12 +673,18 @@ mod tests {
             id: "a".into(),
             path: p1,
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.enqueue(TrackInfo {
             id: "b".into(),
             path: p2,
             title: "B".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.play().unwrap();
@@ -612,6 +702,9 @@ mod tests {
             id: "a".into(),
             path,
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.play().unwrap();
@@ -630,6 +723,9 @@ mod tests {
             id: "a".into(),
             path,
             title: "A".into(),
+            artist: None,
+            album: None,
+            title_from_tag: false,
             duration_secs: None,
         });
         p.play().unwrap();

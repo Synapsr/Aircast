@@ -234,6 +234,7 @@ mod tests {
             active_preset: Some("Prod".into()),
             music_volume_when_mic_open: 0.5,
             crossfade_seconds: 4.0,
+            metadata: Default::default(),
         };
         s.save_settings(new_settings.clone()).unwrap();
         let loaded = s.settings();

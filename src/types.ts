@@ -24,12 +24,27 @@ export interface Preset {
   config: StreamConfig;
 }
 
+export type MetadataMode = "auto" | "static" | "file";
+
+export interface MetadataSettings {
+  enabled: boolean;
+  mode: MetadataMode;
+  template: string;
+  staticText: string;
+  filePath: string | null;
+  filePollSecs: number;
+  micOverride: string;
+  stationName: string;
+  showName: string;
+}
+
 export interface Settings {
   reconnectIntervalSeconds: number;
   language: string; // "auto" | "en" | "fr"
   activePreset?: string | null;
   musicVolumeWhenMicOpen: number; // 0.0 (silent) .. 1.0 (full)
   crossfadeSeconds: number; // 0 .. 30 — fade between music tracks on Next
+  metadata: MetadataSettings;
 }
 
 export type StreamStatus =
@@ -45,6 +60,9 @@ export interface TrackInfo {
   id: string;
   path: string;
   title: string;
+  artist?: string | null;
+  album?: string | null;
+  titleFromTag?: boolean;
   durationSecs: number | null;
 }
 

@@ -8,6 +8,17 @@ const DEFAULT_SETTINGS: Settings = {
   activePreset: null,
   musicVolumeWhenMicOpen: 0.3,
   crossfadeSeconds: 3,
+  metadata: {
+    enabled: true,
+    mode: "auto",
+    template: "{artist} — {title}",
+    staticText: "",
+    filePath: null,
+    filePollSecs: 5,
+    micOverride: "",
+    stationName: "",
+    showName: "",
+  },
 };
 
 export function useSettings() {

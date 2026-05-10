@@ -88,7 +88,8 @@
   },
   "mic": {
     "open": "Micro ouvert",
-    "tapToOpen": "Appuie pour ouvrir le micro"
+    "tapToOpen": "Appuie pour ouvrir le micro",
+    "panelLabel": "Micro"
   },
   "settings": {
     "title": "Réglages",
@@ -144,12 +145,74 @@
     "pasteInvalid": "Le presse-papier ne contient pas un lien Aircast valide.",
     "pasteEmpty": "Ton presse-papier est vide."
   },
+  "broadcast": {
+    "label": "Titre diffusé",
+    "labelShort": "Titre diffusé",
+    "sectionLabel": "Diffusion",
+    "edit": "Modifier",
+    "editHint": "Ouvrir les réglages de diffusion du titre"
+  },
+  "modeSwitch": {
+    "title": "Changement de mode en direct",
+    "subtitle": "Ça va impacter ce qui passe actuellement à l'antenne.",
+    "lead": {
+      "simple": "Passer en mode Simple va :",
+      "studio": "Passer en mode Studio va :"
+    },
+    "simple": {
+      "musicStops": "Couper la musique en cours.",
+      "micOpens": "Ouvrir le micro à l'antenne.",
+      "generic": "Remplacer la sortie studio par le micro brut."
+    },
+    "studio": {
+      "micCloses": "Couper le micro (silence à l'antenne jusqu'à ce que vous le rouvriez).",
+      "silence": "Aucune musique en file d'attente — votre antenne sera silencieuse tant que vous n'aurez pas lancé un morceau."
+    },
+    "cancel": "Annuler",
+    "confirm": "Changer quand même"
+  },
+  "metadata": {
+    "sectionTitle": "Diffusion du titre en cours",
+    "enabled": "Diffuser un titre vers mon serveur Icecast",
+    "modeLabel": "Source",
+    "mode": {
+      "auto": "Depuis la musique",
+      "static": "Texte fixe",
+      "file": "Fichier externe"
+    },
+    "modeHint": {
+      "auto": "Compose le titre depuis les tags ID3/Vorbis du morceau en cours. Retombe sur le nom du fichier si aucun tag.",
+      "static": "Diffuse un texte fixe. Utile pour les talks ou les inter-pauses.",
+      "file": "Lit un fichier texte à intervalle régulier et diffuse son contenu. Pour synchroniser avec un autre logiciel (Mixxx, RadioDJ…)."
+    },
+    "template": "Modèle",
+    "variablesHint": "Cliquer pour insérer dans le champ ci-dessus",
+    "staticText": "Texte à diffuser",
+    "staticPlaceholder": "Vous écoutez Radio XYZ",
+    "filePath": "Fichier",
+    "fileNone": "(aucun fichier sélectionné)",
+    "fileBrowse": "Parcourir…",
+    "filePoll": "Relire toutes les",
+    "micOverride": "Remplacer quand le micro est ouvert",
+    "micOverridePlaceholder": "Émission live — {show}",
+    "micOverrideHint": "Vide = pas de remplacement (le titre composé est utilisé normalement). Supporte les mêmes variables que le modèle.",
+    "identityLabel": "Identité",
+    "stationName": "Nom de la station",
+    "showName": "Nom de l'émission",
+    "showPlaceholder": "Le matin",
+    "testPush": "Diffuser le titre maintenant",
+    "testOk": "Diffusé !",
+    "testErr": "Échec de la diffusion",
+    "testHint": "Pousse manuellement le titre composé vers le serveur. Utile pour vérifier les identifiants et la connectivité."
+  },
   "about": {
-    "proudly": "Fièrement fait par",
+    "proudly": "Fièrement créé par",
     "tagline": "Streaming radio open-source.",
     "body": "Aircast est une application desktop native et gratuite pour diffuser un micro (et plus) vers n'importe quel serveur Icecast. Pas d'abonnement, pas de cloud verrouillé — votre antenne reste la vôtre.",
     "visitSynapsr": "Visiter synapsr.io",
-    "license": "Licence MIT · Construit avec Tauri, Rust et React"
+    "license": "Licence MIT · Construit avec Tauri, Rust et React",
+    "sponsoredBy": "Avec le soutien de",
+    "draneAlt": "DRANE Bretagne — Délégation académique au numérique éducatif"
   },
   "errors": {
     "openSetup": "Ouvrir les réglages",

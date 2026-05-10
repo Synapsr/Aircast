@@ -1,0 +1,12 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Aircast Dev",
+  "identifier": "com.aircast.app.dev",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["aircast-dev"]
+      }
+    }
+  }
+}

@@ -88,7 +88,8 @@
   },
   "mic": {
     "open": "Mic open",
-    "tapToOpen": "Tap to open mic"
+    "tapToOpen": "Tap to open mic",
+    "panelLabel": "Microphone"
   },
   "settings": {
     "title": "Setup",
@@ -144,12 +145,74 @@
     "pasteInvalid": "The clipboard doesn't contain a valid Aircast link.",
     "pasteEmpty": "Your clipboard is empty."
   },
+  "broadcast": {
+    "label": "Now broadcasting",
+    "labelShort": "On-air title",
+    "sectionLabel": "Broadcast",
+    "edit": "Edit",
+    "editHint": "Open the broadcast title settings"
+  },
+  "modeSwitch": {
+    "title": "Switching mode while on air",
+    "subtitle": "This will affect what's currently broadcasting.",
+    "lead": {
+      "simple": "Switching to Simple mode will:",
+      "studio": "Switching to Studio mode will:"
+    },
+    "simple": {
+      "musicStops": "Stop the music currently playing.",
+      "micOpens": "Open the microphone on air.",
+      "generic": "Replace the current studio output with the raw mic feed."
+    },
+    "studio": {
+      "micCloses": "Mute the microphone (silence on air until you re-open it).",
+      "silence": "No music is queued — your antenna will go silent until you press play."
+    },
+    "cancel": "Cancel",
+    "confirm": "Switch anyway"
+  },
+  "metadata": {
+    "sectionTitle": "Now-playing broadcasting",
+    "enabled": "Broadcast a title to my Icecast server",
+    "modeLabel": "Source",
+    "mode": {
+      "auto": "From music",
+      "static": "Fixed text",
+      "file": "External file"
+    },
+    "modeHint": {
+      "auto": "Renders the template below using the current track's tags. Falls back to the file name if no tags.",
+      "static": "Pushes a fixed text. Useful for talk shows or spacer breaks.",
+      "file": "Reads a text file at a regular interval and pushes its content. Use this to sync with another tool (Mixxx, RadioDJ…)."
+    },
+    "template": "Template",
+    "variablesHint": "Click to insert into the field above",
+    "staticText": "Text to broadcast",
+    "staticPlaceholder": "You're listening to Radio XYZ",
+    "filePath": "File",
+    "fileNone": "(no file selected)",
+    "fileBrowse": "Browse…",
+    "filePoll": "Read every",
+    "micOverride": "Override when the mic is open",
+    "micOverridePlaceholder": "Live show — {show}",
+    "micOverrideHint": "Empty = no override (composed title is used as usual). Supports the same placeholders as the template.",
+    "identityLabel": "Identity",
+    "stationName": "Station name",
+    "showName": "Show name",
+    "showPlaceholder": "Morning show",
+    "testPush": "Push the current title now",
+    "testOk": "Pushed!",
+    "testErr": "Push failed",
+    "testHint": "Manually pushes the composed title to your server. Useful to verify credentials and connectivity."
+  },
   "about": {
-    "proudly": "Proudly made by",
+    "proudly": "Proudly created by",
     "tagline": "Open-source radio streaming.",
     "body": "Aircast is a free, native desktop app for streaming a microphone (and more) to any Icecast server. No subscription, no cloud lock-in — your radio stays yours.",
     "visitSynapsr": "Visit synapsr.io",
-    "license": "MIT licensed · Built with Tauri, Rust and React"
+    "license": "MIT licensed · Built with Tauri, Rust and React",
+    "sponsoredBy": "With the support of",
+    "draneAlt": "DRANE Bretagne — French Ministry of Education's digital learning division"
   },
   "errors": {
     "openSetup": "Open Setup",

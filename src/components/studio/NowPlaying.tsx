@@ -1,4 +1,5 @@
 import { Pause, Play, SkipForward, Square } from "lucide-react";
+import { BroadcastTitleChip } from "@/components/BroadcastTitleChip";
 import { useT } from "@/i18n/context";
 import type { MusicSnapshot } from "@/types";
 
@@ -8,9 +9,24 @@ interface Props {
   onPause: () => void;
   onStop: () => void;
   onNext: () => void;
+  /** Title currently pushed to Icecast. Empty = broadcaster dormant. */
+  broadcastTitle: string;
+  /** Whether the stream is live (gates the broadcast chip). */
+  live: boolean;
+  /** Open Setup at the metadata section. Triggered by clicking the chip. */
+  onEditBroadcast: () => void;
 }
 
-export function NowPlaying({ snapshot, onPlay, onPause, onStop, onNext }: Props) {
+export function NowPlaying({
+  snapshot,
+  onPlay,
+  onPause,
+  onStop,
+  onNext,
+  broadcastTitle,
+  live,
+  onEditBroadcast,
+}: Props) {
   const { t } = useT();
   const current = snapshot.current;
   const isPlaying = snapshot.state === "playing";
@@ -48,9 +64,16 @@ export function NowPlaying({ snapshot, onPlay, onPause, onStop, onNext }: Props)
   return (
     <section className="rounded-2xl bg-zinc-900 p-6">
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium uppercase tracking-wider text-rose-400">
-          {t("nowPlaying.label")}
-        </span>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium uppercase tracking-wider text-rose-400">
+            {t("nowPlaying.label")}
+          </span>
+          <BroadcastTitleChip
+            title={broadcastTitle}
+            live={live}
+            onEdit={onEditBroadcast}
+          />
+        </div>
         <h2
           className={`truncate text-2xl font-semibold tracking-tight ${
             current ? "text-zinc-100" : "text-zinc-500"

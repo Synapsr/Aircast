@@ -115,12 +115,20 @@ pub async fn start_stream(
     let settings = state.presets.settings();
     let handle = stream::start(
         app.clone(),
-        config,
+        config.clone(),
         settings,
         format,
         state.capture_ctx.clone(),
     );
     *stream_guard = Some(handle);
+
+    // Tell the metadata updater where to push titles. Pushes are gated on
+    // `stream_live`, so the updater stays quiet until the pipeline reaches
+    // the Live state.
+    let target = stream::metadata::PushTarget::from_config(&config);
+    let _ = state
+        .metadata_tx
+        .try_send(stream::metadata::Command::SetTarget(Some(target)));
 
     Ok(())
 }
@@ -134,6 +142,9 @@ pub async fn stop_stream(state: tauri::State<'_, AppState>, app: AppHandle) -> A
     }
     state.capture_ctx.set_stream_tx(None);
     stream::emit_status(&app, stream::StreamStatus::Idle);
+    let _ = state
+        .metadata_tx
+        .try_send(stream::metadata::Command::SetTarget(None));
     Ok(())
 }
 
@@ -187,7 +198,53 @@ pub fn save_settings(settings: Settings, state: tauri::State<'_, AppState>) -> A
     state
         .mixer
         .set_crossfade_seconds(settings.crossfade_seconds);
+
+    // Side-effects on metadata config: push to updater and (re)start the
+    // file watcher if mode changed to/from File or the path/poll changed.
+    let _ = state
+        .metadata_tx
+        .try_send(crate::stream::metadata::Command::SetSettings(
+            settings.metadata.clone(),
+        ));
+    sync_metadata_file_watcher(&state, &settings.metadata);
+
     state.presets.save_settings(settings)
+}
+
+/// Aborts any running file watcher and spawns a fresh one if the user is
+/// in File mode with a path set. Idempotent — safe to call on every settings
+/// save even when the file mode hasn't changed.
+fn sync_metadata_file_watcher(
+    state: &tauri::State<'_, AppState>,
+    settings: &crate::presets::MetadataSettings,
+) {
+    let mut slot = state.metadata_file_watcher.lock().unwrap();
+    if let Some(handle) = slot.take() {
+        handle.abort();
+    }
+    if settings.mode == crate::presets::MetadataMode::File {
+        if let Some(path) = settings.file_path.clone() {
+            let handle = crate::stream::metadata::spawn_file_watcher(
+                path,
+                settings.file_poll_secs,
+                state.metadata_file_content.clone(),
+            );
+            *slot = Some(handle);
+        } else {
+            // Mode is File but no path: clear stale content so we don't
+            // keep pushing the previous file's last value.
+            let content = state.metadata_file_content.clone();
+            tauri::async_runtime::spawn(async move {
+                *content.lock().await = None;
+            });
+        }
+    } else {
+        // Switching out of File mode: also clear content cache.
+        let content = state.metadata_file_content.clone();
+        tauri::async_runtime::spawn(async move {
+            *content.lock().await = None;
+        });
+    }
 }
 
 #[tauri::command]
@@ -220,6 +277,11 @@ pub fn set_mode(mode: Mode, state: tauri::State<'_, AppState>, app: AppHandle) -
     let _ = app.emit("studio-state-changed", ());
     let _ = app.emit("music-state-changed", ());
     let _ = app.emit("cart-state-changed", ());
+    // Mic gating semantics differ between modes (Simple = passthrough, Studio
+    // = gated by mic_gain). enable/disable_studio touches mic_gain_target
+    // directly, so we must broadcast the new mic state ourselves — otherwise
+    // the StatusBar shows stale info after a mode flip.
+    let _ = app.emit("mic-state-changed", state.mixer.is_mic_open());
     Ok(())
 }
 
@@ -475,6 +537,65 @@ pub fn cart_snapshot(state: tauri::State<'_, AppState>) -> AppResult<Vec<CartSna
         .lock()
         .map_err(|_| AppError::Stream("carts lock poisoned".into()))?
         .snapshot())
+}
+
+// ──────────────────── metadata broadcaster ────────────────────
+
+/// Push the given title (or, if None, the title currently composed from
+/// state + settings) to Icecast immediately, bypassing the dedup. Used by
+/// the "Test now" button in Setup → Advanced so the user can verify the
+/// pipeline end-to-end.
+#[tauri::command]
+pub async fn push_metadata_now(
+    title: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<()> {
+    let title = match title.map(|s| s.trim().to_string()) {
+        Some(s) if !s.is_empty() => s,
+        _ => {
+            // Compose from current state.
+            let settings = state.presets.settings();
+            let music = state
+                .mixer
+                .music
+                .lock()
+                .map(|m| m.snapshot())
+                .map_err(|_| AppError::Stream("music lock poisoned".into()))?;
+            let carts = state
+                .mixer
+                .carts
+                .lock()
+                .map(|c| c.snapshot())
+                .map_err(|_| AppError::Stream("carts lock poisoned".into()))?;
+            let mic_open = state.mixer.is_mic_open();
+            let file_content = state.metadata_file_content.lock().await.clone();
+            let stream_live = state
+                .stream_status
+                .lock()
+                .map(|s| s.is_live())
+                .unwrap_or(false);
+            let input = crate::stream::metadata::build_compose_input(
+                &music,
+                &carts,
+                mic_open,
+                file_content,
+                stream_live,
+            );
+            crate::stream::metadata::compose_title(&input, &settings.metadata)
+        }
+    };
+
+    if title.is_empty() {
+        return Err(AppError::Stream(
+            "Nothing to push: composed title is empty.".into(),
+        ));
+    }
+    state
+        .metadata_tx
+        .send(crate::stream::metadata::Command::PushNow(title))
+        .await
+        .map_err(|e| AppError::Stream(format!("metadata channel closed: {e}")))?;
+    Ok(())
 }
 
 // ──────────────────── diagnostics ────────────────────

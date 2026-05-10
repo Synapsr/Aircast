@@ -1,5 +1,7 @@
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -22,6 +24,19 @@ pub enum StreamStatus {
     },
 }
 
+impl StreamStatus {
+    pub fn is_live(&self) -> bool {
+        matches!(self, StreamStatus::Live)
+    }
+}
+
 pub fn emit(app: &AppHandle, status: StreamStatus) {
+    // Mirror to AppState so the metadata updater (and any other consumer that
+    // doesn't get the event stream) can read the current state synchronously.
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(mut slot) = state.stream_status.lock() {
+            *slot = status.clone();
+        }
+    }
     let _ = app.emit("stream-status", status);
 }

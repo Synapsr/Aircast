@@ -55,7 +55,13 @@ export function StatusBar({ status, micOpen, deviceName, onAboutClick }: Props) 
       </button>
 
       <div className="flex items-center gap-3 justify-self-end">
-        <span className="truncate text-zinc-500">{deviceName ?? t("status.noInput")}</span>
+        {/* The device name used to live here, but it duplicated the header
+            DevicePill (Simple) and the MicPanel (Studio). The status bar is
+            for *state* (stream, mic gate, monitor) — selection lives in the
+            picker above. */}
+        {!deviceName && (
+          <span className="truncate text-zinc-500">{t("status.noInput")}</span>
+        )}
         <button
           type="button"
           onClick={toggle}

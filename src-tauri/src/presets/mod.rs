@@ -1,8 +1,69 @@
 pub mod store;
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::studio::cart::CartSlot;
+
+/// Selects which source feeds the Icecast "now playing" title:
+/// - `Auto`   — render `MetadataSettings::template` from current track tags
+/// - `Static` — push the literal `MetadataSettings::static_text`
+/// - `File`   — poll an external text file at `MetadataSettings::file_path`
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MetadataMode {
+    #[default]
+    Auto,
+    Static,
+    File,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MetadataSettings {
+    /// Master toggle. When false the updater is dormant entirely.
+    pub enabled: bool,
+    pub mode: MetadataMode,
+
+    // Auto mode
+    /// Template with placeholders: {title} {artist} {album} {next_title}
+    /// {next_artist} {show} {station}. Empty placeholders are stripped and
+    /// runs of whitespace collapsed before sending.
+    pub template: String,
+
+    // Static mode
+    pub static_text: String,
+
+    // File mode
+    pub file_path: Option<PathBuf>,
+    pub file_poll_secs: u32,
+
+    // Mic override (applies on top of any mode)
+    /// When non-empty AND the mic is open, this template overrides the
+    /// computed title until the mic closes.
+    pub mic_override: String,
+
+    // Identity used by `{show}` and `{station}` placeholders.
+    pub station_name: String,
+    pub show_name: String,
+}
+
+impl Default for MetadataSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mode: MetadataMode::Auto,
+            template: "{artist} — {title}".into(),
+            static_text: String::new(),
+            file_path: None,
+            file_poll_secs: 5,
+            mic_override: String::new(),
+            station_name: String::new(),
+            show_name: String::new(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -44,6 +105,8 @@ pub struct Settings {
     /// Crossfade duration when skipping to the next track, in seconds.
     /// 0 disables the crossfade. Default 3 s.
     pub crossfade_seconds: f32,
+    /// Icecast "now playing" broadcaster — see MetadataSettings.
+    pub metadata: MetadataSettings,
 }
 
 impl Default for Settings {
@@ -54,6 +117,7 @@ impl Default for Settings {
             active_preset: None,
             music_volume_when_mic_open: 0.3,
             crossfade_seconds: 3.0,
+            metadata: MetadataSettings::default(),
         }
     }
 }

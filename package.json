@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "fetch-ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "build:bundle": "pnpm fetch-ffmpeg && pnpm tauri build --config src-tauri/tauri.bundle.conf.json",
     "test": "vitest run",

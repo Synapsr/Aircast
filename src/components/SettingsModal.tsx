@@ -1,11 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ClipboardCheck, ClipboardCopy, Globe, Link2, Plus, Trash2, X } from "lucide-react";
+import {
+  ChevronDown,
+  ClipboardCheck,
+  ClipboardCopy,
+  FileText,
+  Folder,
+  Globe,
+  Link2,
+  Plus,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ServerForm } from "@/components/ServerForm";
 import { usePresets } from "@/hooks/usePresets";
 import { useT } from "@/i18n/context";
 import type { LanguagePref } from "@/i18n";
 import { api } from "@/lib/api";
-import { DEFAULT_CONFIG, type Preset, type Settings, type StreamConfig } from "@/types";
+import {
+  DEFAULT_CONFIG,
+  type MetadataMode,
+  type MetadataSettings,
+  type Preset,
+  type Settings,
+  type StreamConfig,
+} from "@/types";
+
+/// Section to open expanded when the modal mounts. Useful when launching
+/// the modal from a deep-link inside the app (e.g. the "edit" button on
+/// the live broadcast strip).
+export type SettingsInitialSection = "metadata" | null;
 
 interface Props {
   open: boolean;
@@ -15,6 +40,7 @@ interface Props {
   settings: Settings;
   onSettingsChange: (settings: Settings) => void;
   onPasteLink?: (url: string) => boolean;
+  initialSection?: SettingsInitialSection;
 }
 
 const SAVE_DEBOUNCE_MS = 400;
@@ -27,6 +53,7 @@ export function SettingsModal({
   settings,
   onSettingsChange,
   onPasteLink,
+  initialSection,
 }: Props) {
   const { t } = useT();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -34,6 +61,26 @@ export function SettingsModal({
   const [pasteError, setPasteError] = useState<string | null>(null);
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const metadataSectionRef = useRef<HTMLElement | null>(null);
+
+  // Open at a specific section when requested (e.g. from the "edit" button
+  // on the live broadcast strip). Both Advanced and Metadata are collapsibles
+  // sitting next to the form, so we expand both when targeting metadata —
+  // less surprising than yanking the user away from the server form.
+  useEffect(() => {
+    if (!open || !initialSection) return;
+    if (initialSection === "metadata") {
+      setShowMetadata(true);
+      // Defer the scroll until after the section renders.
+      requestAnimationFrame(() => {
+        metadataSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    }
+  }, [open, initialSection]);
   const [activeName, setActiveNameState] = useState<string | null>(
     settings.activePreset ?? null,
   );
@@ -328,6 +375,25 @@ export function SettingsModal({
                   </div>
                 )}
               </section>
+
+              <section ref={metadataSectionRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowMetadata((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100"
+                >
+                  <span>{t("metadata.sectionTitle")}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${showMetadata ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {showMetadata && (
+                  <MetadataSection
+                    settings={settings.metadata}
+                    onChange={(metadata) => onSettingsChange({ ...settings, metadata })}
+                  />
+                )}
+              </section>
             </div>
           )}
         </div>
@@ -528,6 +594,305 @@ function LanguagePicker({
           {opt.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Metadata section: lets the user pick how the Icecast "now playing" title is
+// composed (auto from music tags, static, or external file), and provides a
+// "Test now" button that pushes the composed title to the server immediately.
+//
+// Variables shown in the help chips can be clicked to insert into the focused
+// template input at the cursor position.
+// ──────────────────────────────────────────────────────────────────────────────
+
+const TEMPLATE_VARIABLES = [
+  "{title}",
+  "{artist}",
+  "{album}",
+  "{next_title}",
+  "{next_artist}",
+  "{show}",
+  "{station}",
+];
+
+function MetadataSection({
+  settings,
+  onChange,
+}: {
+  settings: MetadataSettings;
+  onChange: (next: MetadataSettings) => void;
+}) {
+  const { t } = useT();
+  const templateRef = useRef<HTMLInputElement | null>(null);
+  const micOverrideRef = useRef<HTMLInputElement | null>(null);
+  const [focused, setFocused] = useState<"template" | "mic" | null>("template");
+  const [testState, setTestState] = useState<"idle" | "ok" | "err">("idle");
+  const [testError, setTestError] = useState<string | null>(null);
+
+  function patch<K extends keyof MetadataSettings>(key: K, value: MetadataSettings[K]) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  function insertVariable(v: string) {
+    const targetRef = focused === "mic" ? micOverrideRef : templateRef;
+    const input = targetRef.current;
+    if (!input) return;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    const next = input.value.slice(0, start) + v + input.value.slice(end);
+    if (focused === "mic") patch("micOverride", next);
+    else patch("template", next);
+    // restore caret after the inserted variable
+    requestAnimationFrame(() => {
+      input.focus();
+      const caret = start + v.length;
+      input.setSelectionRange(caret, caret);
+    });
+  }
+
+  async function pickFile() {
+    const result = await openDialog({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Text", extensions: ["txt", "log", "md"] }, { name: "All", extensions: ["*"] }],
+    });
+    if (typeof result === "string") {
+      patch("filePath", result);
+    }
+  }
+
+  async function pushNow() {
+    setTestState("idle");
+    setTestError(null);
+    try {
+      await api.pushMetadataNow(null);
+      setTestState("ok");
+    } catch (e) {
+      setTestState("err");
+      setTestError(typeof e === "string" ? e : (e as Error).message ?? String(e));
+    }
+    window.setTimeout(() => setTestState("idle"), 2400);
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-5 rounded-lg bg-zinc-800/40 p-4">
+      {/* Master toggle */}
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span className="text-sm text-zinc-200">{t("metadata.enabled")}</span>
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={(e) => patch("enabled", e.target.checked)}
+          className="h-4 w-4 cursor-pointer accent-rose-500"
+        />
+      </label>
+
+      {settings.enabled && (
+        <>
+          {/* Mode picker */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs uppercase tracking-wider text-zinc-500">
+              {t("metadata.modeLabel")}
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              {(["auto", "static", "file"] as MetadataMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => patch("mode", mode)}
+                  className={[
+                    "rounded-lg px-3 py-2.5 text-xs font-medium transition-colors",
+                    settings.mode === mode
+                      ? "bg-rose-500 text-white shadow-md shadow-rose-500/20"
+                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700",
+                  ].join(" ")}
+                >
+                  {t(`metadata.mode.${mode}`)}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-500">
+              {t(`metadata.modeHint.${settings.mode}`)}
+            </p>
+          </div>
+
+          {/* Mode-specific controls */}
+          {settings.mode === "auto" && (
+            <label className="flex flex-col gap-2">
+              <span className="text-xs text-zinc-500">{t("metadata.template")}</span>
+              <input
+                ref={templateRef}
+                type="text"
+                value={settings.template}
+                onFocus={() => setFocused("template")}
+                onChange={(e) => patch("template", e.target.value)}
+                placeholder="{artist} — {title}"
+                className="rounded-lg bg-zinc-800 px-3.5 py-2.5 font-mono text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
+              />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] text-zinc-500">
+                  {t("metadata.variablesHint")}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {TEMPLATE_VARIABLES.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => insertVariable(v)}
+                      className="rounded-md bg-zinc-700/60 px-2 py-1 font-mono text-[11px] text-zinc-200 transition-colors hover:bg-zinc-600"
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </label>
+          )}
+
+          {settings.mode === "static" && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-zinc-500">{t("metadata.staticText")}</span>
+              <input
+                type="text"
+                value={settings.staticText}
+                onChange={(e) => patch("staticText", e.target.value)}
+                placeholder={t("metadata.staticPlaceholder")}
+                className="rounded-lg bg-zinc-800 px-3.5 py-2.5 text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
+              />
+            </label>
+          )}
+
+          {settings.mode === "file" && (
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-zinc-500">{t("metadata.filePath")}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-1 items-center gap-2 truncate rounded-lg bg-zinc-800 px-3.5 py-2.5">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                    <span className="truncate text-sm text-zinc-200">
+                      {settings.filePath || (
+                        <span className="text-zinc-500">{t("metadata.fileNone")}</span>
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={pickFile}
+                    className="flex items-center gap-1.5 rounded-lg bg-zinc-700 px-3 py-2.5 text-xs font-medium text-zinc-200 hover:bg-zinc-600"
+                  >
+                    <Folder className="h-3.5 w-3.5" />
+                    <span>{t("metadata.fileBrowse")}</span>
+                  </button>
+                </div>
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-sm text-zinc-300">{t("metadata.filePoll")}</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={settings.filePollSecs}
+                    onChange={(e) =>
+                      patch(
+                        "filePollSecs",
+                        Math.max(1, Math.min(60, +e.target.value || 5)),
+                      )
+                    }
+                    className="w-20 rounded-lg bg-zinc-800 px-3 py-2 text-right text-sm tabular-nums text-zinc-100 outline-none focus:ring-2 focus:ring-rose-500/40"
+                  />
+                  <span className="text-xs text-zinc-500">
+                    {t("settings.secondsShort")}
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {/* Mic override (cross-cutting) */}
+          <div className="flex flex-col gap-2 border-t border-zinc-800 pt-4">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-zinc-500">{t("metadata.micOverride")}</span>
+              <input
+                ref={micOverrideRef}
+                type="text"
+                value={settings.micOverride}
+                onFocus={() => setFocused("mic")}
+                onChange={(e) => patch("micOverride", e.target.value)}
+                placeholder={t("metadata.micOverridePlaceholder")}
+                className="rounded-lg bg-zinc-800 px-3.5 py-2.5 font-mono text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
+              />
+              <span className="text-[11px] text-zinc-500">
+                {t("metadata.micOverrideHint")}
+              </span>
+            </label>
+          </div>
+
+          {/* Identity */}
+          <div className="flex flex-col gap-2 border-t border-zinc-800 pt-4">
+            <span className="text-xs uppercase tracking-wider text-zinc-500">
+              {t("metadata.identityLabel")}
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-zinc-500">
+                  {t("metadata.stationName")}
+                </span>
+                <input
+                  type="text"
+                  value={settings.stationName}
+                  onChange={(e) => patch("stationName", e.target.value)}
+                  placeholder="Radio XYZ"
+                  className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-zinc-500">
+                  {t("metadata.showName")}
+                </span>
+                <input
+                  type="text"
+                  value={settings.showName}
+                  onChange={(e) => patch("showName", e.target.value)}
+                  placeholder={t("metadata.showPlaceholder")}
+                  className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Test push */}
+          <div className="flex flex-col gap-2 border-t border-zinc-800 pt-4">
+            <button
+              type="button"
+              onClick={pushNow}
+              className={[
+                "flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+                testState === "ok"
+                  ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+                  : testState === "err"
+                    ? "bg-red-500/15 text-red-300 ring-1 ring-red-500/30"
+                    : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700",
+              ].join(" ")}
+            >
+              <Send className="h-4 w-4" />
+              <span>
+                {testState === "ok"
+                  ? t("metadata.testOk")
+                  : testState === "err"
+                    ? t("metadata.testErr")
+                    : t("metadata.testPush")}
+              </span>
+            </button>
+            {testState === "err" && testError && (
+              <span className="text-[11px] text-red-300/80">{testError}</span>
+            )}
+            <span className="text-[11px] text-zinc-500">{t("metadata.testHint")}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

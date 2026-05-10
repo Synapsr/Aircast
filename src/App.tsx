@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Mic, Radio, Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
 import { AboutModal } from "@/components/AboutModal";
 import { AddServerFromLinkModal } from "@/components/AddServerFromLinkModal";
+import { BroadcastTitleStrip } from "@/components/BroadcastTitleStrip";
+import { ConfirmModeSwitchModal } from "@/components/ConfirmModeSwitchModal";
 import { DevicePill } from "@/components/DevicePill";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { ErrorDialog } from "@/components/ErrorDialog";
@@ -18,8 +20,10 @@ import { useDeepLink } from "@/hooks/useDeepLink";
 import { useSettings } from "@/hooks/useSettings";
 import { useStreamStatus } from "@/hooks/useStreamStatus";
 import { useVuLevel } from "@/hooks/useVuLevel";
+import { useBroadcastTitle } from "@/hooks/useBroadcastTitle";
 import { useMode } from "@/hooks/useMode";
 import { useMicOpen } from "@/hooks/useMicOpen";
+import { useMusic } from "@/hooks/useMusic";
 import { usePresets } from "@/hooks/usePresets";
 import { LocaleProvider, useT } from "@/i18n/context";
 import type { LanguagePref } from "@/i18n";
@@ -53,13 +57,19 @@ function Shell({ settings, updateSettings }: ShellProps) {
   const { t } = useT();
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<
+    "metadata" | null
+  >(null);
   const [showAbout, setShowAbout] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingModeSwitch, setPendingModeSwitch] = useState<AppMode | null>(null);
 
   const { config, update: updateConfig, loaded: configLoaded } = useCurrentConfig(deviceId);
   const { presets, refresh: refreshPresets } = usePresets();
   const { mode, setMode } = useMode();
   const { open: micOpen } = useMicOpen();
+  const { snapshot: musicSnapshot } = useMusic();
+  const broadcastTitle = useBroadcastTitle();
   const status = useStreamStatus();
   const level = useVuLevel();
   const { url: deepLinkUrl, clear: clearDeepLink } = useDeepLink();
@@ -118,6 +128,44 @@ function Shell({ settings, updateSettings }: ShellProps) {
   }
 
   const isStreaming = status.kind !== "idle" && status.kind !== "error";
+
+  // Mode change while live has audible side effects on the antenna (music
+  // stops, mic gating flips). Intercept the switch and surface a modal that
+  // explains the consequences before applying it. Off-air switches go
+  // straight through.
+  //
+  // Note: we read `isStreaming` and `mode` from refs rather than via
+  // `useCallback` deps. Vite's Fast Refresh has a known failure mode where
+  // a memoized callback keeps a stale closure of `isStreaming` after a hot
+  // reload, which made the warning silently skip during development. Refs
+  // are always up-to-date with no memo-cache to invalidate.
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  const requestModeChange = useCallback(
+    (next: AppMode) => {
+      if (next === modeRef.current) return;
+      if (isStreamingRef.current) {
+        setPendingModeSwitch(next);
+      } else {
+        void setMode(next);
+      }
+    },
+    [setMode],
+  );
+
+  const confirmModeSwitch = useCallback(() => {
+    if (pendingModeSwitch) {
+      void setMode(pendingModeSwitch);
+    }
+    setPendingModeSwitch(null);
+  }, [pendingModeSwitch, setMode]);
+
+  const cancelModeSwitch = useCallback(() => {
+    setPendingModeSwitch(null);
+  }, []);
 
   // Capture runs as long as a device is selected — the streaming pipeline
   // attaches and detaches independently. Re-running this effect on every
@@ -221,11 +269,15 @@ function Shell({ settings, updateSettings }: ShellProps) {
         </div>
 
         <div className="justify-self-center">
-          <ModeSwitch value={mode} onChange={setMode} />
+          <ModeSwitch value={mode} onChange={requestModeChange} />
         </div>
 
         <div className="flex items-center gap-2 justify-self-end">
-          <DevicePill value={deviceId} onChange={setDeviceId} />
+          {/* In Studio mode the device selector lives inside the MicPanel
+              (next to the mic-open toggle) so the user has one place that
+              owns the microphone control. The header pill is therefore only
+              shown in Simple mode. */}
+          {mode === "simple" && <DevicePill value={deviceId} onChange={setDeviceId} />}
           <button
             type="button"
             onClick={() => setShowSettings(true)}
@@ -273,10 +325,31 @@ function Shell({ settings, updateSettings }: ShellProps) {
               onStart={handleStart}
               onStop={handleStop}
               deviceReady={!!deviceId}
+              deviceId={deviceId}
+              onDeviceChange={setDeviceId}
+              broadcastTitle={broadcastTitle}
+              onEditBroadcast={() => {
+                setSettingsInitialSection("metadata");
+                setShowSettings(true);
+              }}
             />
           )}
         </div>
       </div>
+
+      {/* Strip is Simple-mode only; Studio mode shows the same info as a chip
+          inside the NowPlaying card to avoid duplicating "À l'antenne" with
+          the StatusBar. */}
+      {mode === "simple" && (
+        <BroadcastTitleStrip
+          title={broadcastTitle}
+          live={status.kind === "live"}
+          onEdit={() => {
+            setSettingsInitialSection("metadata");
+            setShowSettings(true);
+          }}
+        />
+      )}
 
       <StatusBar
         status={status}
@@ -288,12 +361,16 @@ function Shell({ settings, updateSettings }: ShellProps) {
       {config && (
         <SettingsModal
           open={showSettings}
-          onClose={() => setShowSettings(false)}
+          onClose={() => {
+            setShowSettings(false);
+            setSettingsInitialSection(null);
+          }}
           config={config}
           onConfigChange={(c) => void updateConfig(c)}
           settings={settings}
           onSettingsChange={(s) => void updateSettings(s)}
           onPasteLink={handlePasteLink}
+          initialSection={settingsInitialSection}
         />
       )}
 
@@ -305,6 +382,14 @@ function Shell({ settings, updateSettings }: ShellProps) {
       />
 
       <AboutModal open={showAbout} onClose={() => setShowAbout(false)} />
+
+      <ConfirmModeSwitchModal
+        target={pendingModeSwitch}
+        musicPlaying={musicSnapshot.state === "playing"}
+        micOpen={micOpen}
+        onCancel={cancelModeSwitch}
+        onConfirm={confirmModeSwitch}
+      />
 
       <ErrorDialog
         open={lastStreamError !== null}
