@@ -13,7 +13,37 @@
   },
   "mode": {
     "simple": "Simple",
-    "studio": "Studio"
+    "studio": "Studio",
+    "relay": "Relay"
+  },
+  "relay": {
+    "sectionTitle": "Relay (rebroadcast a stream)",
+    "source": "Source",
+    "sources": "Sources",
+    "sourcesLabel": "Saved sources",
+    "manage": "Manage",
+    "pickSource": "Pick a source…",
+    "newSource": "New",
+    "addFirstSource": "Add a stream URL to relay",
+    "emptyHint": "No relay sources yet. Add one to get started.",
+    "nameField": "Name",
+    "urlField": "Stream URL",
+    "deleteHint": "Delete this source",
+    "upstreamLevel": "Upstream level",
+    "status": {
+      "idle": "Idle",
+      "connecting": "Connecting…",
+      "streaming": "Streaming",
+      "reconnecting": "Reconnecting…",
+      "stopped": "Stopped"
+    },
+    "errors": {
+      "nameRequired": "A name is required.",
+      "urlRequired": "A URL is required.",
+      "nameTaken": "A source with this name already exists."
+    },
+    "enabledModesLabel": "Available modes",
+    "enabledModesHint": "Hide modes you don't use to clean up the header switch. At least one mode stays visible."
   },
   "device": {
     "label": "Microphone",
@@ -124,10 +154,18 @@
     "crossfadeHint": "Smoothly blend the previous track into the next when you skip.",
     "secondsShort": "s",
     "off": "Off",
+    "audioBehavior": "Audio behaviour",
+    "diagnosticTitle": "Diagnostic",
     "diagnosticHint": "Stuck on something? Copy a diagnostic report (version, devices, recent errors and the last 300 log lines) and paste it into a bug report.",
     "diagnosticCopy": "Copy diagnostic report",
     "diagnosticCopied": "Diagnostic copied to clipboard",
-    "diagnosticFailed": "Could not copy diagnostic"
+    "diagnosticFailed": "Could not copy diagnostic",
+    "tab": {
+      "servers": "Servers",
+      "relay": "Relay sources",
+      "metadata": "Title broadcast",
+      "advanced": "Advanced"
+    }
   },
   "link": {
     "title": "Add server from link",
@@ -157,16 +195,17 @@
     "subtitle": "This will affect what's currently broadcasting.",
     "lead": {
       "simple": "Switching to Simple mode will:",
-      "studio": "Switching to Studio mode will:"
+      "studio": "Switching to Studio mode will:",
+      "relay": "Switching to Relay mode will:"
     },
-    "simple": {
+    "effect": {
       "musicStops": "Stop the music currently playing.",
       "micOpens": "Open the microphone on air.",
-      "generic": "Replace the current studio output with the raw mic feed."
-    },
-    "studio": {
       "micCloses": "Mute the microphone (silence on air until you re-open it).",
-      "silence": "No music is queued — your antenna will go silent until you press play."
+      "silence": "No music is queued — your antenna will go silent until you press play.",
+      "relayStops": "Stop the upstream relay (the current external source goes off-air).",
+      "upstreamStarts": "Start broadcasting the upstream relay URL on air.",
+      "generic": "Replace the current studio output with another source."
     },
     "cancel": "Cancel",
     "confirm": "Switch anyway"
@@ -218,6 +257,7 @@
     "openSetup": "Open Setup",
     "noServer": "Add a server first — open Setup.",
     "noDevice": "Pick a microphone first.",
+    "noRelaySource": "Pick a relay source first — open the relay picker.",
     "missingHost": "Server address is missing.",
     "badPort": "Server port must be between 1 and 65535.",
     "missingMount": "Mount point is missing (something like /aircast.mp3).",

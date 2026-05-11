@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown,
   ClipboardCheck,
   ClipboardCopy,
   FileText,
@@ -27,10 +26,12 @@ import {
   type StreamConfig,
 } from "@/types";
 
-/// Section to open expanded when the modal mounts. Useful when launching
-/// the modal from a deep-link inside the app (e.g. the "edit" button on
-/// the live broadcast strip).
-export type SettingsInitialSection = "metadata" | null;
+/// Tab to focus when the modal mounts. Used by in-app deep links (e.g. the
+/// "edit" button on the live broadcast strip, or the "Add a relay URL" CTA
+/// in Relay mode).
+export type SettingsInitialSection = "metadata" | "relay" | null;
+
+type SettingsTab = "servers" | "relay" | "metadata" | "advanced";
 
 interface Props {
   open: boolean;
@@ -60,26 +61,14 @@ export function SettingsModal({
   const { presets, refresh } = usePresets();
   const [pasteError, setPasteError] = useState<string | null>(null);
 
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showMetadata, setShowMetadata] = useState(false);
-  const metadataSectionRef = useRef<HTMLElement | null>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("servers");
 
-  // Open at a specific section when requested (e.g. from the "edit" button
-  // on the live broadcast strip). Both Advanced and Metadata are collapsibles
-  // sitting next to the form, so we expand both when targeting metadata —
-  // less surprising than yanking the user away from the server form.
+  // Jump to a specific tab when opened via an in-app deep link.
   useEffect(() => {
-    if (!open || !initialSection) return;
-    if (initialSection === "metadata") {
-      setShowMetadata(true);
-      // Defer the scroll until after the section renders.
-      requestAnimationFrame(() => {
-        metadataSectionRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      });
-    }
+    if (!open) return;
+    if (initialSection === "metadata") setActiveTab("metadata");
+    else if (initialSection === "relay") setActiveTab("relay");
+    // initialSection === null means "open wherever we already were".
   }, [open, initialSection]);
   const [activeName, setActiveNameState] = useState<string | null>(
     settings.activePreset ?? null,
@@ -241,162 +230,108 @@ export function SettingsModal({
         </button>
       </header>
 
+      {/* Tab bar — segments the modal into orthogonal concerns: which server
+          to send to / where the source audio comes from in Relay mode /
+          what listeners see / app-wide preferences. */}
+      <nav className="flex shrink-0 items-center gap-1 border-b border-zinc-800 px-4">
+        <TabButton
+          active={activeTab === "servers"}
+          onClick={() => setActiveTab("servers")}
+        >
+          {t("settings.tab.servers")}
+        </TabButton>
+        <TabButton
+          active={activeTab === "relay"}
+          onClick={() => setActiveTab("relay")}
+        >
+          {t("settings.tab.relay")}
+        </TabButton>
+        <TabButton
+          active={activeTab === "metadata"}
+          onClick={() => setActiveTab("metadata")}
+        >
+          {t("settings.tab.metadata")}
+        </TabButton>
+        <TabButton
+          active={activeTab === "advanced"}
+          onClick={() => setActiveTab("advanced")}
+        >
+          {t("settings.tab.advanced")}
+        </TabButton>
+      </nav>
+
       <div className="flex min-h-0 flex-1 gap-0 overflow-hidden">
-        <ServersSidebar
-          presets={presets}
-          activeName={activeName}
-          onSelect={selectPreset}
-          onNew={handleNew}
-          onDelete={handleDelete}
-          onPasteLink={onPasteLink ? handlePasteLink : undefined}
-          pasteError={pasteError}
-          dismissPasteError={() => setPasteError(null)}
-        />
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
-          {!activePreset ? (
-            <EmptyEditor onNew={handleNew} hasPresets={presets.length > 0} />
-          ) : (
-            <div className="flex flex-col gap-5">
-              <div className="flex flex-col gap-1">
-                <input
-                  value={nameDraft}
-                  onChange={(e) => {
-                    setNameDraft(e.target.value);
-                    setNameError(null);
-                  }}
-                  onBlur={() => void commitRename()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      (e.target as HTMLInputElement).blur();
-                    }
-                  }}
-                  placeholder={t("settings.serverNamePlaceholder")}
-                  className="-mx-1 rounded-md bg-transparent px-1 py-0.5 text-xl font-semibold tracking-tight text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 hover:bg-zinc-800/40 focus:bg-zinc-800/60"
-                />
-                {nameError && <p className="text-xs text-rose-400">{nameError}</p>}
-              </div>
-
-              <ServerForm config={config} onChange={onConfigChange} />
-
-              <section>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100"
-                >
-                  <span>{t("settings.advanced")}</span>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {showAdvanced && (
-                  <div className="mt-2 flex flex-col gap-4 rounded-lg bg-zinc-800/40 p-4">
-                    <label className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-300">{t("settings.ducking")}</span>
-                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 font-mono text-xs tabular-nums text-zinc-100">
-                          {Math.round(settings.musicVolumeWhenMicOpen * 100)}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={Math.round(settings.musicVolumeWhenMicOpen * 100)}
-                        onChange={(e) =>
-                          onSettingsChange({
-                            ...settings,
-                            musicVolumeWhenMicOpen: Math.max(
-                              0,
-                              Math.min(1, +e.target.value / 100),
-                            ),
-                          })
+        {activeTab === "servers" && (
+          <>
+            <ServersSidebar
+              presets={presets}
+              activeName={activeName}
+              onSelect={selectPreset}
+              onNew={handleNew}
+              onDelete={handleDelete}
+              onPasteLink={onPasteLink ? handlePasteLink : undefined}
+              pasteError={pasteError}
+              dismissPasteError={() => setPasteError(null)}
+            />
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
+              {!activePreset ? (
+                <EmptyEditor onNew={handleNew} hasPresets={presets.length > 0} />
+              ) : (
+                <div className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-1">
+                    <input
+                      value={nameDraft}
+                      onChange={(e) => {
+                        setNameDraft(e.target.value);
+                        setNameError(null);
+                      }}
+                      onBlur={() => void commitRename()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          (e.target as HTMLInputElement).blur();
                         }
-                        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-700 accent-rose-500"
-                      />
-                      <span className="text-xs text-zinc-500">{t("settings.duckingHint")}</span>
-                    </label>
-
-                    <label className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-300">{t("settings.crossfade")}</span>
-                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 font-mono text-xs tabular-nums text-zinc-100">
-                          {settings.crossfadeSeconds === 0
-                            ? t("settings.off")
-                            : `${settings.crossfadeSeconds.toFixed(1)} ${t("settings.secondsShort")}`}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={10}
-                        step={0.5}
-                        value={settings.crossfadeSeconds}
-                        onChange={(e) =>
-                          onSettingsChange({
-                            ...settings,
-                            crossfadeSeconds: Math.max(0, Math.min(10, +e.target.value)),
-                          })
-                        }
-                        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-700 accent-rose-500"
-                      />
-                      <span className="text-xs text-zinc-500">{t("settings.crossfadeHint")}</span>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-xs text-zinc-500">{t("settings.reconnect")}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={3600}
-                        value={settings.reconnectIntervalSeconds}
-                        onChange={(e) =>
-                          onSettingsChange({
-                            ...settings,
-                            reconnectIntervalSeconds: Math.max(
-                              0,
-                              Math.min(3600, +e.target.value || 0),
-                            ),
-                          })
-                        }
-                        className="rounded-lg bg-zinc-800 px-3.5 py-2.5 text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
-                      />
-                    </label>
-
-                    <div className="mt-1 flex flex-col gap-1.5 border-t border-zinc-800 pt-4">
-                      <span className="text-xs text-zinc-500">
-                        {t("settings.diagnosticHint")}
-                      </span>
-                      <DiagnosticCopyButton />
-                    </div>
+                      }}
+                      placeholder={t("settings.serverNamePlaceholder")}
+                      className="-mx-1 rounded-md bg-transparent px-1 py-0.5 text-xl font-semibold tracking-tight text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 hover:bg-zinc-800/40 focus:bg-zinc-800/60"
+                    />
+                    {nameError && <p className="text-xs text-rose-400">{nameError}</p>}
                   </div>
-                )}
-              </section>
-
-              <section ref={metadataSectionRef}>
-                <button
-                  type="button"
-                  onClick={() => setShowMetadata((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100"
-                >
-                  <span>{t("metadata.sectionTitle")}</span>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${showMetadata ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {showMetadata && (
-                  <MetadataSection
-                    settings={settings.metadata}
-                    onChange={(metadata) => onSettingsChange({ ...settings, metadata })}
-                  />
-                )}
-              </section>
+                  <ServerForm config={config} onChange={onConfigChange} />
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
+
+        {activeTab === "relay" && (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
+            <RelaySection
+              sources={settings.relaySources}
+              onSourcesChange={(relaySources) =>
+                onSettingsChange({ ...settings, relaySources })
+              }
+            />
+          </div>
+        )}
+
+        {activeTab === "metadata" && (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
+            <MetadataSection
+              settings={settings.metadata}
+              onChange={(metadata) => onSettingsChange({ ...settings, metadata })}
+            />
+          </div>
+        )}
+
+        {activeTab === "advanced" && (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
+            <AdvancedSection
+              settings={settings}
+              onSettingsChange={onSettingsChange}
+            />
+          </div>
+        )}
       </div>
 
       <footer className="flex items-center justify-between gap-4 border-t border-zinc-800 px-6 py-4">
@@ -894,6 +829,373 @@ function MetadataSection({
         </>
       )}
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Relay sources section: lets the user manage named upstream stream URLs
+// used by the Relay mode, and toggle which top-level modes appear in the
+// header switch. Saved URLs survive across launches.
+// ──────────────────────────────────────────────────────────────────────────────
+
+function RelaySection({
+  sources,
+  onSourcesChange,
+}: {
+  sources: import("@/types").RelaySource[];
+  onSourcesChange: (sources: import("@/types").RelaySource[]) => void;
+}) {
+  const { t } = useT();
+  // Form state for adding/editing a source. `editingName === null` means
+  // "creating a new entry"; otherwise we're editing the existing one in
+  // place. The form is collapsed into a single button row by default to
+  // keep the section visually compact.
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [draftUrl, setDraftUrl] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  function startCreate() {
+    setEditingName(null);
+    setDraftName("");
+    setDraftUrl("");
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function startEdit(s: import("@/types").RelaySource) {
+    setEditingName(s.name);
+    setDraftName(s.name);
+    setDraftUrl(s.url);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function cancelForm() {
+    setFormOpen(false);
+    setFormError(null);
+  }
+
+  async function commitForm() {
+    const name = draftName.trim();
+    const url = draftUrl.trim();
+    if (!name) {
+      setFormError(t("relay.errors.nameRequired"));
+      return;
+    }
+    if (!url) {
+      setFormError(t("relay.errors.urlRequired"));
+      return;
+    }
+    if (
+      editingName === null &&
+      sources.some((s) => s.name === name)
+    ) {
+      setFormError(t("relay.errors.nameTaken"));
+      return;
+    }
+    if (editingName !== null && editingName !== name) {
+      // Rename: persist via backend, also update local list.
+      try {
+        await api.renameRelaySource(editingName, name);
+      } catch (e) {
+        setFormError(String(e));
+        return;
+      }
+    }
+    try {
+      await api.upsertRelaySource({ name, url });
+    } catch (e) {
+      setFormError(String(e));
+      return;
+    }
+    // Mirror to parent settings — keep the local in-memory list in sync.
+    const without = sources.filter(
+      (s) => s.name !== (editingName ?? name),
+    );
+    onSourcesChange([...without, { name, url }].sort((a, b) => a.name.localeCompare(b.name)));
+    setFormOpen(false);
+  }
+
+  async function removeSource(name: string) {
+    try {
+      await api.deleteRelaySource(name);
+    } catch {
+      // ignore — backend already logged it
+    }
+    onSourcesChange(sources.filter((s) => s.name !== name));
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-5 rounded-lg bg-zinc-800/40 p-4">
+      {/* Sources list */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wider text-zinc-500">
+            {t("relay.sourcesLabel")}
+          </span>
+          <button
+            type="button"
+            onClick={startCreate}
+            className="flex items-center gap-1 rounded-full bg-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-100 hover:bg-zinc-600"
+          >
+            <Plus className="h-3 w-3" />
+            {t("relay.newSource")}
+          </button>
+        </div>
+        {sources.length === 0 && !formOpen && (
+          <p className="rounded-lg bg-zinc-900/50 px-3 py-4 text-center text-xs text-zinc-500">
+            {t("relay.emptyHint")}
+          </p>
+        )}
+        {sources.length > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {sources.map((s) => (
+              <li
+                key={s.name}
+                className="flex items-center justify-between gap-3 rounded-lg bg-zinc-900/60 px-3 py-2.5 ring-1 ring-zinc-800/80"
+              >
+                <button
+                  type="button"
+                  onClick={() => startEdit(s)}
+                  className="flex min-w-0 flex-1 flex-col items-start text-left"
+                >
+                  <span className="truncate text-sm text-zinc-100">{s.name}</span>
+                  <span className="truncate text-[11px] text-zinc-500">{s.url}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSource(s.name)}
+                  title={t("relay.deleteHint")}
+                  className="rounded-full p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-rose-300"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Inline form for create/edit */}
+        {formOpen && (
+          <div className="mt-1 flex flex-col gap-2 rounded-lg bg-zinc-900/60 p-3 ring-1 ring-zinc-800">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-zinc-500">{t("relay.nameField")}</span>
+              <input
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                placeholder="France Inter"
+                className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-rose-500/40"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-zinc-500">{t("relay.urlField")}</span>
+              <input
+                type="text"
+                value={draftUrl}
+                onChange={(e) => setDraftUrl(e.target.value)}
+                placeholder="https://stream.example.com/live.mp3"
+                className="rounded-lg bg-zinc-800 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:ring-2 focus:ring-rose-500/40"
+              />
+            </label>
+            {formError && (
+              <span className="text-[11px] text-red-300">{formError}</span>
+            )}
+            <div className="mt-1 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelForm}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void commitForm()}
+                className="rounded-lg bg-rose-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-400"
+              >
+                {t("common.save")}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Advanced tab: ducking, crossfade, reconnect delay, mode visibility toggles,
+// diagnostic bundle. App-wide preferences, never per-server.
+// ──────────────────────────────────────────────────────────────────────────────
+
+function AdvancedSection({
+  settings,
+  onSettingsChange,
+}: {
+  settings: Settings;
+  onSettingsChange: (s: Settings) => void;
+}) {
+  const { t } = useT();
+
+  function toggleMode(key: keyof import("@/types").EnabledModes) {
+    const next = { ...settings.enabledModes, [key]: !settings.enabledModes[key] };
+    // At least one mode must remain visible or the header switch becomes
+    // useless. Silently bounce the click.
+    if (!next.simple && !next.studio && !next.relay) return;
+    onSettingsChange({ ...settings, enabledModes: next });
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Audio behaviour */}
+      <section className="flex flex-col gap-4 rounded-lg bg-zinc-800/40 p-4">
+        <span className="text-xs uppercase tracking-wider text-zinc-500">
+          {t("settings.audioBehavior")}
+        </span>
+
+        <label className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">{t("settings.ducking")}</span>
+            <span className="rounded-full bg-zinc-800 px-2 py-0.5 font-mono text-xs tabular-nums text-zinc-100">
+              {Math.round(settings.musicVolumeWhenMicOpen * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={Math.round(settings.musicVolumeWhenMicOpen * 100)}
+            onChange={(e) =>
+              onSettingsChange({
+                ...settings,
+                musicVolumeWhenMicOpen: Math.max(0, Math.min(1, +e.target.value / 100)),
+              })
+            }
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-700 accent-rose-500"
+          />
+          <span className="text-xs text-zinc-500">{t("settings.duckingHint")}</span>
+        </label>
+
+        <label className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-300">{t("settings.crossfade")}</span>
+            <span className="rounded-full bg-zinc-800 px-2 py-0.5 font-mono text-xs tabular-nums text-zinc-100">
+              {settings.crossfadeSeconds === 0
+                ? t("settings.off")
+                : `${settings.crossfadeSeconds.toFixed(1)} ${t("settings.secondsShort")}`}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={0.5}
+            value={settings.crossfadeSeconds}
+            onChange={(e) =>
+              onSettingsChange({
+                ...settings,
+                crossfadeSeconds: Math.max(0, Math.min(10, +e.target.value)),
+              })
+            }
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-700 accent-rose-500"
+          />
+          <span className="text-xs text-zinc-500">{t("settings.crossfadeHint")}</span>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs text-zinc-500">{t("settings.reconnect")}</span>
+          <input
+            type="number"
+            min={0}
+            max={3600}
+            value={settings.reconnectIntervalSeconds}
+            onChange={(e) =>
+              onSettingsChange({
+                ...settings,
+                reconnectIntervalSeconds: Math.max(0, Math.min(3600, +e.target.value || 0)),
+              })
+            }
+            className="rounded-lg bg-zinc-800 px-3.5 py-2.5 text-sm text-zinc-100 outline-none hover:bg-zinc-700/80 focus:bg-zinc-700 focus:ring-2 focus:ring-rose-500/40"
+          />
+        </label>
+      </section>
+
+      {/* Interface — modes available */}
+      <section className="flex flex-col gap-3 rounded-lg bg-zinc-800/40 p-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs uppercase tracking-wider text-zinc-500">
+            {t("relay.enabledModesLabel")}
+          </span>
+          <p className="text-[11px] text-zinc-500">{t("relay.enabledModesHint")}</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(["studio", "simple", "relay"] as const).map((m) => {
+            const active = settings.enabledModes[m];
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => toggleMode(m)}
+                className={[
+                  "rounded-lg px-3 py-2.5 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-rose-500 text-white shadow-md shadow-rose-500/20"
+                    : "bg-zinc-900/60 text-zinc-500 hover:bg-zinc-800/80",
+                ].join(" ")}
+              >
+                {t(`mode.${m}`)}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Diagnostic */}
+      <section className="flex flex-col gap-2 rounded-lg bg-zinc-800/40 p-4">
+        <span className="text-xs uppercase tracking-wider text-zinc-500">
+          {t("settings.diagnosticTitle")}
+        </span>
+        <p className="text-xs text-zinc-500">{t("settings.diagnosticHint")}</p>
+        <DiagnosticCopyButton />
+      </section>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative px-4 py-3 text-sm font-medium transition-colors",
+        active ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300",
+      ].join(" ")}
+    >
+      {children}
+      {/* Underline indicator for the active tab. Rose accent matches the
+          ModeSwitch sliding indicator so the two controls feel related. */}
+      <span
+        aria-hidden
+        className={[
+          "absolute inset-x-3 -bottom-px h-0.5 rounded-full transition-opacity",
+          active ? "bg-rose-500 opacity-100" : "opacity-0",
+        ].join(" ")}
+      />
+    </button>
   );
 }
 

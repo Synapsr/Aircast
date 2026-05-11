@@ -45,6 +45,9 @@ export interface Settings {
   musicVolumeWhenMicOpen: number; // 0.0 (silent) .. 1.0 (full)
   crossfadeSeconds: number; // 0 .. 30 — fade between music tracks on Next
   metadata: MetadataSettings;
+  relaySources: RelaySource[];
+  activeRelaySource?: string | null;
+  enabledModes: EnabledModes;
 }
 
 export type StreamStatus =
@@ -54,7 +57,25 @@ export type StreamStatus =
   | { kind: "reconnecting"; nextAttemptInMs: number }
   | { kind: "error"; message: string; details?: string };
 
-export type AppMode = "simple" | "studio";
+export type AppMode = "simple" | "studio" | "relay";
+
+export interface RelaySource {
+  name: string;
+  url: string;
+}
+
+export type UpstreamStatus =
+  | "idle"
+  | "connecting"
+  | "streaming"
+  | "reconnecting"
+  | "stopped";
+
+export interface EnabledModes {
+  simple: boolean;
+  studio: boolean;
+  relay: boolean;
+}
 
 export interface TrackInfo {
   id: string;

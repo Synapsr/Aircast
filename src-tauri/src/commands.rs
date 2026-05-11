@@ -26,6 +26,10 @@ pub fn start_audio_preview(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> AppResult<()> {
+    // Entering Simple/Studio: ensure any Relay input is stopped so the cpal
+    // mic owns the audio source exclusively.
+    *state.relay.lock().unwrap() = None;
+
     // Hold the capture mutex for the entire operation so two parallel
     // invocations can't race and leave duplicate cpal streams running.
     let mut guard = state.capture.lock().unwrap();
@@ -39,17 +43,36 @@ pub fn start_audio_preview(
         .mixer
         .set_target_format(format.sample_rate, format.channels);
 
-    let mixer = state.mixer.clone();
-    let ctx = state.capture_ctx.clone();
-    let mut vu = VuEmitter::new(app.clone());
+    let consumer = make_passthrough_consumer(state.mixer.clone(), state.capture_ctx.clone(), &app);
+    let session = capture::start_capture(&device_id, consumer)?;
 
+    *guard = Some(session);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_audio_preview(state: tauri::State<'_, AppState>, app: AppHandle) -> AppResult<()> {
+    *state.capture.lock().unwrap() = None;
+    state.capture_ctx.set_format(None);
+    vu::emit_zero(&app);
+    Ok(())
+}
+
+/// Build the consumer closure shared by the cpal capture (Simple/Studio) and
+/// the relay url-input (Relay). Both produce mono f32 PCM that goes through
+/// the mixer to the monitor ring and the active ffmpeg encoder.
+fn make_passthrough_consumer(
+    mixer: std::sync::Arc<crate::studio::Mixer>,
+    ctx: crate::state::CaptureContext,
+    app: &AppHandle,
+) -> impl FnMut(&[f32]) + Send + 'static {
+    let mut vu = VuEmitter::new(app.clone());
     let mut output_buf: Vec<f32> = Vec::with_capacity(4096);
     let mut music_buf: Vec<f32> = Vec::with_capacity(4096);
     let mut cart_buf: Vec<f32> = Vec::with_capacity(4096);
     let mut bytes_buf: Vec<u8> = Vec::with_capacity(16_384);
-
-    let session = capture::start_capture(&device_id, move |mic_samples| {
-        mixer.process(mic_samples, &mut output_buf, &mut music_buf, &mut cart_buf);
+    move |samples: &[f32]| {
+        mixer.process(samples, &mut output_buf, &mut music_buf, &mut cart_buf);
         vu.push(&output_buf);
 
         if let Ok(slot) = ctx.stream_tx.try_lock() {
@@ -63,15 +86,101 @@ pub fn start_audio_preview(
                 bytes_buf = Vec::with_capacity(16_384);
             }
         }
-    })?;
+    }
+}
 
+// ──────────────────── relay (URL input → Icecast) ────────────────────
+
+#[tauri::command]
+pub fn list_relay_sources(
+    state: tauri::State<'_, AppState>,
+) -> AppResult<Vec<crate::presets::RelaySource>> {
+    Ok(state.presets.relay_sources())
+}
+
+#[tauri::command]
+pub fn upsert_relay_source(
+    source: crate::presets::RelaySource,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<()> {
+    state.presets.upsert_relay_source(source)
+}
+
+#[tauri::command]
+pub fn delete_relay_source(name: String, state: tauri::State<'_, AppState>) -> AppResult<()> {
+    state.presets.delete_relay_source(&name)
+}
+
+#[tauri::command]
+pub fn rename_relay_source(
+    old_name: String,
+    new_name: String,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<()> {
+    state.presets.rename_relay_source(&old_name, &new_name)
+}
+
+#[tauri::command]
+pub fn set_active_relay_source(
+    name: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<()> {
+    state.presets.set_active_relay_source(name)
+}
+
+/// Spawn the upstream URL decoder for Relay mode. Mutually exclusive with
+/// the cpal mic capture: starting a relay input stops any active mic session
+/// (and vice versa). Looks up the URL from the named relay source persisted
+/// in settings.
+#[tauri::command]
+pub fn start_relay_input(
+    source_name: String,
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> AppResult<()> {
+    // Find the URL.
+    let source = state
+        .presets
+        .relay_sources()
+        .into_iter()
+        .find(|s| s.name == source_name)
+        .ok_or_else(|| AppError::Stream(format!("relay source '{source_name}' not found")))?;
+
+    log::info!(
+        "start_relay_input: source='{}' url='{}'",
+        source.name,
+        source.url
+    );
+
+    // Tear down any cpal mic session — relay owns the input now.
+    *state.capture.lock().unwrap() = None;
+    let mut guard = state.relay.lock().unwrap();
+    *guard = None;
+
+    // Announce the format we're going to feed the mixer at.
+    let format = crate::audio::capture::AudioFormat {
+        sample_rate: crate::audio::url_input::RELAY_RATE,
+        channels: crate::audio::url_input::RELAY_CHANNELS,
+    };
+    state.capture_ctx.set_format(Some(format));
+    state
+        .mixer
+        .set_target_format(format.sample_rate, format.channels);
+
+    // Persist the selection so a restart restores it.
+    state
+        .presets
+        .set_active_relay_source(Some(source.name.clone()))?;
+
+    let consumer = make_passthrough_consumer(state.mixer.clone(), state.capture_ctx.clone(), &app);
+    let session = crate::audio::url_input::start_relay_input(app.clone(), source.url, consumer)?;
     *guard = Some(session);
     Ok(())
 }
 
 #[tauri::command]
-pub fn stop_audio_preview(state: tauri::State<'_, AppState>, app: AppHandle) -> AppResult<()> {
-    *state.capture.lock().unwrap() = None;
+pub fn stop_relay_input(state: tauri::State<'_, AppState>, app: AppHandle) -> AppResult<()> {
+    *state.relay.lock().unwrap() = None;
     state.capture_ctx.set_format(None);
     vu::emit_zero(&app);
     Ok(())
@@ -270,7 +379,9 @@ pub fn get_mode(state: tauri::State<'_, AppState>) -> AppResult<Mode> {
 #[tauri::command]
 pub fn set_mode(mode: Mode, state: tauri::State<'_, AppState>, app: AppHandle) -> AppResult<()> {
     match mode {
-        Mode::Simple => state.mixer.disable_studio(),
+        // Simple and Relay both want passthrough mixing: the mic (Simple) or
+        // the decoded upstream stream (Relay) flows straight to the output.
+        Mode::Simple | Mode::Relay => state.mixer.disable_studio(),
         Mode::Studio => state.mixer.enable_studio(),
     }
     state.presets.save_mode(mode)?;

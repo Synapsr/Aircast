@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { Mic, Radio, Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
+import { Cable, Mic, Radio, Settings as SettingsIcon, SlidersHorizontal } from "lucide-react";
 import { AboutModal } from "@/components/AboutModal";
 import { AddServerFromLinkModal } from "@/components/AddServerFromLinkModal";
 import { BroadcastTitleStrip } from "@/components/BroadcastTitleStrip";
@@ -8,6 +8,7 @@ import { ConfirmModeSwitchModal } from "@/components/ConfirmModeSwitchModal";
 import { DevicePill } from "@/components/DevicePill";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { ErrorDialog } from "@/components/ErrorDialog";
+import { RelayMode } from "@/components/RelayMode";
 import { SimpleMode } from "@/components/SimpleMode";
 import { SettingsModal } from "@/components/SettingsModal";
 import { StudioMode } from "@/components/studio/StudioMode";
@@ -58,7 +59,7 @@ function Shell({ settings, updateSettings }: ShellProps) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<
-    "metadata" | null
+    "metadata" | "relay" | null
   >(null);
   const [showAbout, setShowAbout] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -167,32 +168,47 @@ function Shell({ settings, updateSettings }: ShellProps) {
     setPendingModeSwitch(null);
   }, []);
 
-  // Capture runs as long as a device is selected — the streaming pipeline
-  // attaches and detaches independently. Re-running this effect on every
-  // start/stop would tear down and rebuild the cpal stream, producing a
-  // few-hundred-ms gap in the local monitor each time.
+  // Audio input lifecycle:
+  // - Simple/Studio: cpal mic capture for the selected device.
+  // - Relay: ffmpeg URL decoder for the active relay source.
+  // Starting one tears down the other on the backend, so we can freely
+  // re-run this effect when the user switches mode or input.
   useEffect(() => {
-    if (!deviceId) return;
-
     let cancelled = false;
-    api.startAudioPreview(deviceId).catch((e) => {
-      if (!cancelled) setActionError(String(e));
-    });
+    if (mode === "relay") {
+      const name = settings.activeRelaySource;
+      if (!name) return;
+      api.startRelayInput(name).catch((e) => {
+        if (!cancelled) setActionError(String(e));
+      });
+    } else if (deviceId) {
+      api.startAudioPreview(deviceId).catch((e) => {
+        if (!cancelled) setActionError(String(e));
+      });
+    }
     return () => {
       cancelled = true;
     };
-  }, [deviceId]);
+  }, [mode, deviceId, settings.activeRelaySource]);
 
   const handleStart = async () => {
     setActionError(null);
+    // Relay mode has no mic device — the upstream URL plays that role. We
+    // still validate everything else, just bypass the device check by
+    // pretending one is set.
+    const effectiveDeviceId = mode === "relay" ? "relay" : deviceId ?? "";
     const issueKey = validateStreamConfig(
-      config ? { ...config, deviceId: deviceId ?? "" } : null,
+      config ? { ...config, deviceId: effectiveDeviceId } : null,
     );
     if (issueKey) {
       setActionError(t(issueKey));
       if (issueKey !== "errors.noDevice") {
         setShowSettings(true);
       }
+      return;
+    }
+    if (mode === "relay" && !settings.activeRelaySource) {
+      setActionError(t("errors.noRelaySource"));
       return;
     }
     try {
@@ -269,7 +285,11 @@ function Shell({ settings, updateSettings }: ShellProps) {
         </div>
 
         <div className="justify-self-center">
-          <ModeSwitch value={mode} onChange={requestModeChange} />
+          <ModeSwitch
+            value={mode}
+            onChange={requestModeChange}
+            enabled={settings.enabledModes}
+          />
         </div>
 
         <div className="flex items-center gap-2 justify-self-end">
@@ -304,8 +324,7 @@ function Shell({ settings, updateSettings }: ShellProps) {
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
-          {mode === "simple" ? (
-            // Vertically center the simple-mode card when there's room.
+          {mode === "simple" && (
             <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
               <SimpleMode
                 level={level}
@@ -317,7 +336,8 @@ function Shell({ settings, updateSettings }: ShellProps) {
                 deviceReady={!!deviceId}
               />
             </div>
-          ) : (
+          )}
+          {mode === "studio" && (
             <StudioMode
               level={level}
               config={summaryReady ? config : null}
@@ -333,6 +353,29 @@ function Shell({ settings, updateSettings }: ShellProps) {
                 setShowSettings(true);
               }}
             />
+          )}
+          {mode === "relay" && (
+            <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
+              <RelayMode
+                level={level}
+                vuActive={vuActive}
+                config={summaryReady ? config : null}
+                status={status}
+                onStart={handleStart}
+                onStop={handleStop}
+                onOpenRelaySources={() => {
+                  setSettingsInitialSection("relay");
+                  setShowSettings(true);
+                }}
+                activeSourceName={settings.activeRelaySource ?? null}
+                sources={settings.relaySources}
+                onPickSource={(name) => {
+                  void api.setActiveRelaySource(name);
+                  void api.startRelayInput(name);
+                  void updateSettings({ ...settings, activeRelaySource: name });
+                }}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -356,6 +399,7 @@ function Shell({ settings, updateSettings }: ShellProps) {
         micOpen={micOpen}
         deviceName={deviceId}
         onAboutClick={() => setShowAbout(true)}
+        mode={mode}
       />
 
       {config && (
@@ -384,6 +428,7 @@ function Shell({ settings, updateSettings }: ShellProps) {
       <AboutModal open={showAbout} onClose={() => setShowAbout(false)} />
 
       <ConfirmModeSwitchModal
+        source={mode}
         target={pendingModeSwitch}
         musicPlaying={musicSnapshot.state === "playing"}
         micOpen={micOpen}
@@ -415,34 +460,60 @@ function Shell({ settings, updateSettings }: ShellProps) {
   );
 }
 
-function ModeSwitch({ value, onChange }: { value: AppMode; onChange: (m: AppMode) => void }) {
+function ModeSwitch({
+  value,
+  onChange,
+  enabled,
+}: {
+  value: AppMode;
+  onChange: (m: AppMode) => void;
+  enabled: { simple: boolean; studio: boolean; relay: boolean };
+}) {
   const { t } = useT();
-  const isStudio = value === "studio";
+  // Compose the list of visible modes in stable order. If only one mode is
+  // visible, hide the switch entirely — there's nothing to switch.
+  // Studio first as it's the most used mode in production. Simple is the
+  // entry-level fallback, Relay the niche use-case.
+  const visible: AppMode[] = (["studio", "simple", "relay"] as AppMode[]).filter(
+    (m) => enabled[m],
+  );
+  if (visible.length < 2) return null;
+
+  const idx = Math.max(0, visible.indexOf(value));
+
+  // Each ModeButton has a fixed w-28 (7rem) width, so the sliding indicator
+  // can be sized to match and translated by full button widths (`100%` =
+  // its own width = one button).
   return (
     <div className="relative flex items-center rounded-full bg-zinc-900 p-1 shadow-inner shadow-black/30">
       <span
         aria-hidden
-        className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-gradient-to-b from-rose-400 to-rose-500 shadow-md shadow-rose-500/30 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-        style={{
-          transform: isStudio ? "translateX(100%)" : "translateX(0)",
-        }}
+        className="absolute inset-y-1 left-1 w-28 rounded-full bg-gradient-to-b from-rose-400 to-rose-500 shadow-md shadow-rose-500/30 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        style={{ transform: `translateX(${idx * 100}%)` }}
       />
-      <ModeButton
-        active={!isStudio}
-        onClick={() => onChange("simple")}
-        icon={<Mic className="h-3.5 w-3.5" />}
-      >
-        {t("mode.simple")}
-      </ModeButton>
-      <ModeButton
-        active={isStudio}
-        onClick={() => onChange("studio")}
-        icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
-      >
-        {t("mode.studio")}
-      </ModeButton>
+      {visible.map((m) => (
+        <ModeButton
+          key={m}
+          active={m === value}
+          onClick={() => onChange(m)}
+          icon={modeIcon(m)}
+        >
+          {t(`mode.${m}`)}
+        </ModeButton>
+      ))}
     </div>
   );
+}
+
+function modeIcon(m: AppMode) {
+  switch (m) {
+    case "simple":
+      return <Mic className="h-3.5 w-3.5" />;
+    case "studio":
+      return <SlidersHorizontal className="h-3.5 w-3.5" />;
+    case "relay":
+      return <Cable className="h-3.5 w-3.5" />;
+  }
 }
 
 function ModeButton({

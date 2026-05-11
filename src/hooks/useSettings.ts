@@ -19,6 +19,9 @@ const DEFAULT_SETTINGS: Settings = {
     stationName: "",
     showName: "",
   },
+  relaySources: [],
+  activeRelaySource: null,
+  enabledModes: { simple: true, studio: true, relay: true },
 };
 
 export function useSettings() {

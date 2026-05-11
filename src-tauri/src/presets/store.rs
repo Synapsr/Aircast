@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, AppResult};
-use crate::presets::{Mode, PersistedData, Preset, Settings, StreamConfig};
+use crate::presets::{Mode, PersistedData, Preset, RelaySource, Settings, StreamConfig};
 use crate::studio::cart::CartSlot;
 
 pub struct PresetStore {
@@ -117,6 +117,87 @@ impl PresetStore {
     pub fn save_carts(&self, carts: Vec<CartSlot>) -> AppResult<()> {
         let mut data = self.data.lock().unwrap();
         data.carts = carts;
+        write(&self.path, &data)
+    }
+
+    // ── Relay sources ───────────────────────────────────────────────────────
+
+    pub fn relay_sources(&self) -> Vec<RelaySource> {
+        self.data.lock().unwrap().settings.relay_sources.clone()
+    }
+
+    pub fn upsert_relay_source(&self, source: RelaySource) -> AppResult<()> {
+        let mut data = self.data.lock().unwrap();
+        let trimmed_name = source.name.trim().to_string();
+        if trimmed_name.is_empty() {
+            return Err(AppError::Preset("relay source name cannot be empty".into()));
+        }
+        let trimmed_url = source.url.trim().to_string();
+        if trimmed_url.is_empty() {
+            return Err(AppError::Preset("relay source URL cannot be empty".into()));
+        }
+        let candidate = RelaySource {
+            name: trimmed_name.clone(),
+            url: trimmed_url,
+        };
+        let sources = &mut data.settings.relay_sources;
+        if let Some(existing) = sources.iter_mut().find(|s| s.name == trimmed_name) {
+            *existing = candidate;
+        } else {
+            sources.push(candidate);
+        }
+        write(&self.path, &data)
+    }
+
+    pub fn delete_relay_source(&self, name: &str) -> AppResult<()> {
+        let mut data = self.data.lock().unwrap();
+        data.settings.relay_sources.retain(|s| s.name != name);
+        if data.settings.active_relay_source.as_deref() == Some(name) {
+            data.settings.active_relay_source = None;
+        }
+        write(&self.path, &data)
+    }
+
+    pub fn rename_relay_source(&self, old_name: &str, new_name: &str) -> AppResult<()> {
+        if old_name == new_name {
+            return Ok(());
+        }
+        let new_trim = new_name.trim().to_string();
+        if new_trim.is_empty() {
+            return Err(AppError::Preset("relay source name cannot be empty".into()));
+        }
+        let mut data = self.data.lock().unwrap();
+        if data
+            .settings
+            .relay_sources
+            .iter()
+            .any(|s| s.name == new_trim)
+        {
+            return Err(AppError::Preset(format!(
+                "relay source '{new_trim}' already exists"
+            )));
+        }
+        let idx = data
+            .settings
+            .relay_sources
+            .iter()
+            .position(|s| s.name == old_name)
+            .ok_or_else(|| AppError::Preset(format!("relay source '{old_name}' not found")))?;
+        data.settings.relay_sources[idx].name = new_trim.clone();
+        if data.settings.active_relay_source.as_deref() == Some(old_name) {
+            data.settings.active_relay_source = Some(new_trim);
+        }
+        write(&self.path, &data)
+    }
+
+    pub fn set_active_relay_source(&self, name: Option<String>) -> AppResult<()> {
+        let mut data = self.data.lock().unwrap();
+        if let Some(n) = &name {
+            if !data.settings.relay_sources.iter().any(|s| &s.name == n) {
+                return Err(AppError::Preset(format!("relay source '{n}' not found")));
+            }
+        }
+        data.settings.active_relay_source = name;
         write(&self.path, &data)
     }
 }
@@ -235,6 +316,9 @@ mod tests {
             music_volume_when_mic_open: 0.5,
             crossfade_seconds: 4.0,
             metadata: Default::default(),
+            relay_sources: Vec::new(),
+            active_relay_source: None,
+            enabled_modes: Default::default(),
         };
         s.save_settings(new_settings.clone()).unwrap();
         let loaded = s.settings();

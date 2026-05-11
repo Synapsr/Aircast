@@ -5,6 +5,7 @@ import type {
   CartSnapshot,
   MusicSnapshot,
   Preset,
+  RelaySource,
   Settings,
   StreamConfig,
   TrackInfo,
@@ -143,5 +144,28 @@ export const api = {
   // ───── metadata broadcaster ─────
   pushMetadataNow(title: string | null = null): Promise<void> {
     return invoke("push_metadata_now", { title });
+  },
+
+  // ───── relay sources ─────
+  listRelaySources(): Promise<RelaySource[]> {
+    return invoke("list_relay_sources");
+  },
+  upsertRelaySource(source: RelaySource): Promise<void> {
+    return invoke("upsert_relay_source", { source });
+  },
+  deleteRelaySource(name: string): Promise<void> {
+    return invoke("delete_relay_source", { name });
+  },
+  renameRelaySource(oldName: string, newName: string): Promise<void> {
+    return invoke("rename_relay_source", { oldName, newName });
+  },
+  setActiveRelaySource(name: string | null): Promise<void> {
+    return invoke("set_active_relay_source", { name });
+  },
+  startRelayInput(sourceName: string): Promise<void> {
+    return invoke("start_relay_input", { sourceName });
+  },
+  stopRelayInput(): Promise<void> {
+    return invoke("stop_relay_input");
   },
 };

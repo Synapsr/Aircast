@@ -4,6 +4,8 @@ import { useT } from "@/i18n/context";
 import type { AppMode } from "@/types";
 
 interface Props {
+  /** Current mode (the one we're leaving). Drives which side effects we list. */
+  source: AppMode;
   /** Target mode the user is trying to switch to. `null` = modal closed. */
   target: AppMode | null;
   /** Music currently playing in the studio queue. Drives one of the warnings. */
@@ -21,6 +23,7 @@ interface Props {
  * change goes through.
  */
 export function ConfirmModeSwitchModal({
+  source,
   target,
   musicPlaying,
   micOpen,
@@ -48,24 +51,51 @@ export function ConfirmModeSwitchModal({
     if (e.target === dialogRef.current) onCancel();
   }
 
-  // Compute the consequences list dynamically. Each consequence is its own
-  // bullet so the user can read them at a glance.
+  // Compute the consequences list per direction. Each bullet is something the
+  // user will actually hear (or stop hearing) on the antenna after confirm.
   const consequences: string[] = (() => {
-    if (target === "simple") {
-      const items: string[] = [];
-      if (musicPlaying) items.push(t("modeSwitch.simple.musicStops"));
-      if (!micOpen) items.push(t("modeSwitch.simple.micOpens"));
-      // If neither applies we still show one safety bullet so the user
-      // understands a transition is happening.
-      if (items.length === 0) items.push(t("modeSwitch.simple.generic"));
-      return items;
+    if (!target) return [];
+    const items: string[] = [];
+
+    // Source-side side effects: what stops broadcasting.
+    if (source === "studio" && musicPlaying) {
+      items.push(t("modeSwitch.effect.musicStops"));
     }
-    // target === "studio"
-    return [
-      t("modeSwitch.studio.micCloses"),
-      ...(musicPlaying ? [] : [t("modeSwitch.studio.silence")]),
-    ];
+    if (source === "relay") {
+      items.push(t("modeSwitch.effect.relayStops"));
+    }
+
+    // Target-side side effects: what becomes the audio source.
+    if (target === "simple") {
+      // Simple = mic-passthrough, always on-air.
+      if (!micOpen || source === "relay") {
+        items.push(t("modeSwitch.effect.micOpens"));
+      }
+    } else if (target === "studio") {
+      // Studio always opens with the mic gated closed.
+      items.push(t("modeSwitch.effect.micCloses"));
+      // If no music is queued, the antenna goes silent until the user does
+      // something (presses play, opens mic).
+      if (!musicPlaying) {
+        items.push(t("modeSwitch.effect.silence"));
+      }
+    } else if (target === "relay") {
+      // Relay replaces whatever was being broadcast with the upstream URL.
+      if (source !== "relay") {
+        items.push(t("modeSwitch.effect.upstreamStarts"));
+      }
+    }
+
+    // Failsafe: always show at least one bullet so the user knows something
+    // will change after they confirm.
+    if (items.length === 0) {
+      items.push(t("modeSwitch.effect.generic"));
+    }
+    return items;
   })();
+
+  // Lead-in line — which mode we're heading to.
+  const leadKey = target ? `modeSwitch.lead.${target}` : "modeSwitch.lead.simple";
 
   return (
     <dialog
@@ -97,11 +127,7 @@ export function ConfirmModeSwitchModal({
       </header>
 
       <div className="flex flex-col gap-3 px-6 pb-5">
-        <p className="text-sm text-zinc-300">
-          {target === "simple"
-            ? t("modeSwitch.lead.simple")
-            : t("modeSwitch.lead.studio")}
-        </p>
+        <p className="text-sm text-zinc-300">{t(leadKey)}</p>
         <ul className="flex flex-col gap-1.5 rounded-lg bg-zinc-800/60 p-3.5 text-sm">
           {consequences.map((c, i) => (
             <li key={i} className="flex items-start gap-2 text-zinc-200">

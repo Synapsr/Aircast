@@ -93,6 +93,41 @@ pub struct Preset {
     pub config: StreamConfig,
 }
 
+/// Named upstream stream URL the user can relay to Icecast. The Relay mode
+/// shows a picker over the list, then ffmpeg decodes the URL and feeds the
+/// existing mixer/encoder pipeline.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RelaySource {
+    pub name: String,
+    /// Anything ffmpeg can open: http(s)://…/stream.mp3, HLS .m3u8, an
+    /// Icecast `/listen/...` URL, even a local file path. Validated only
+    /// lightly client-side (must be non-empty) — ffmpeg surfaces the real
+    /// errors at connect time.
+    pub url: String,
+}
+
+/// Per-mode visibility toggles. Hidden modes don't appear in the header
+/// switch — useful when a school radio only ever uses one mode and the
+/// extra picker buttons are clutter.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct EnabledModes {
+    pub simple: bool,
+    pub studio: bool,
+    pub relay: bool,
+}
+
+impl Default for EnabledModes {
+    fn default() -> Self {
+        Self {
+            simple: true,
+            studio: true,
+            relay: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
@@ -107,6 +142,12 @@ pub struct Settings {
     pub crossfade_seconds: f32,
     /// Icecast "now playing" broadcaster — see MetadataSettings.
     pub metadata: MetadataSettings,
+    /// Upstream stream URLs available to the Relay mode (CRUD).
+    pub relay_sources: Vec<RelaySource>,
+    /// Currently-selected relay source by name (or None on first run).
+    pub active_relay_source: Option<String>,
+    /// Which top-level modes are exposed in the header switch.
+    pub enabled_modes: EnabledModes,
 }
 
 impl Default for Settings {
@@ -118,6 +159,9 @@ impl Default for Settings {
             music_volume_when_mic_open: 0.3,
             crossfade_seconds: 3.0,
             metadata: MetadataSettings::default(),
+            relay_sources: Vec::new(),
+            active_relay_source: None,
+            enabled_modes: EnabledModes::default(),
         }
     }
 }
@@ -128,6 +172,7 @@ pub enum Mode {
     #[default]
     Simple,
     Studio,
+    Relay,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -201,6 +201,13 @@ pub fn run() {
             commands::open_external,
             commands::get_diagnostic_bundle,
             commands::push_metadata_now,
+            commands::list_relay_sources,
+            commands::upsert_relay_source,
+            commands::delete_relay_source,
+            commands::rename_relay_source,
+            commands::set_active_relay_source,
+            commands::start_relay_input,
+            commands::stop_relay_input,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

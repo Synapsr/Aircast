@@ -13,7 +13,37 @@
   },
   "mode": {
     "simple": "Simple",
-    "studio": "Studio"
+    "studio": "Studio",
+    "relay": "Relais"
+  },
+  "relay": {
+    "sectionTitle": "Relais (rediffuser un flux)",
+    "source": "Source",
+    "sources": "Sources",
+    "sourcesLabel": "Sources enregistrées",
+    "manage": "Gérer",
+    "pickSource": "Choisir une source…",
+    "newSource": "Nouvelle",
+    "addFirstSource": "Ajouter une URL à relayer",
+    "emptyHint": "Aucune source de relais. Ajoutez-en une pour commencer.",
+    "nameField": "Nom",
+    "urlField": "URL du flux",
+    "deleteHint": "Supprimer cette source",
+    "upstreamLevel": "Niveau amont",
+    "status": {
+      "idle": "Inactif",
+      "connecting": "Connexion…",
+      "streaming": "Flux reçu",
+      "reconnecting": "Reconnexion…",
+      "stopped": "Arrêté"
+    },
+    "errors": {
+      "nameRequired": "Un nom est requis.",
+      "urlRequired": "Une URL est requise.",
+      "nameTaken": "Une source porte déjà ce nom."
+    },
+    "enabledModesLabel": "Modes disponibles",
+    "enabledModesHint": "Masquez les modes que vous n'utilisez pas. Au moins un mode reste visible."
   },
   "device": {
     "label": "Micro",
@@ -124,10 +154,18 @@
     "crossfadeHint": "Enchaîne en douceur le morceau précédent et le suivant.",
     "secondsShort": "s",
     "off": "Off",
+    "audioBehavior": "Comportement audio",
+    "diagnosticTitle": "Diagnostic",
     "diagnosticHint": "Un souci ? Copie un rapport de diagnostic (version, devices, dernières erreurs et 300 lignes de log) à coller dans ton report de bug.",
     "diagnosticCopy": "Copier le rapport de diagnostic",
     "diagnosticCopied": "Diagnostic copié dans le presse-papier",
-    "diagnosticFailed": "Impossible de copier le diagnostic"
+    "diagnosticFailed": "Impossible de copier le diagnostic",
+    "tab": {
+      "servers": "Serveurs",
+      "relay": "Sources relais",
+      "metadata": "Titre diffusé",
+      "advanced": "Avancé"
+    }
   },
   "link": {
     "title": "Ajouter un serveur depuis un lien",
@@ -157,16 +195,17 @@
     "subtitle": "Ça va impacter ce qui passe actuellement à l'antenne.",
     "lead": {
       "simple": "Passer en mode Simple va :",
-      "studio": "Passer en mode Studio va :"
+      "studio": "Passer en mode Studio va :",
+      "relay": "Passer en mode Relais va :"
     },
-    "simple": {
+    "effect": {
       "musicStops": "Couper la musique en cours.",
       "micOpens": "Ouvrir le micro à l'antenne.",
-      "generic": "Remplacer la sortie studio par le micro brut."
-    },
-    "studio": {
       "micCloses": "Couper le micro (silence à l'antenne jusqu'à ce que vous le rouvriez).",
-      "silence": "Aucune musique en file d'attente — votre antenne sera silencieuse tant que vous n'aurez pas lancé un morceau."
+      "silence": "Aucune musique en file d'attente — votre antenne sera silencieuse tant que vous n'aurez pas lancé un morceau.",
+      "relayStops": "Couper le flux amont (la source externe actuelle quitte l'antenne).",
+      "upstreamStarts": "Démarrer la diffusion du flux amont à l'antenne.",
+      "generic": "Remplacer la source actuelle par une autre."
     },
     "cancel": "Annuler",
     "confirm": "Changer quand même"
@@ -218,6 +257,7 @@
     "openSetup": "Ouvrir les réglages",
     "noServer": "Ajoute d'abord un serveur — ouvre les réglages.",
     "noDevice": "Choisis d'abord un micro.",
+    "noRelaySource": "Choisis d'abord une source de relais.",
     "missingHost": "L'adresse du serveur manque.",
     "badPort": "Le port doit être entre 1 et 65535.",
     "missingMount": "Le point de montage manque (par exemple /aircast.mp3).",

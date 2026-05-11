@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::audio::capture::{AudioFormat, CaptureSession};
 use crate::audio::playback::{self, MonitorSession};
+use crate::audio::url_input::RelayInputSession;
 use crate::error::AppResult;
 use crate::presets::store::PresetStore;
 use crate::stream::metadata;
@@ -60,6 +61,10 @@ pub struct AppState {
     pub capture: Mutex<Option<CaptureSession>>,
     pub capture_ctx: CaptureContext,
     pub stream: tokio::sync::Mutex<Option<StreamHandle>>,
+    /// Active Relay-mode input session (ffmpeg decoding an upstream URL).
+    /// Mutually exclusive with `capture` — Relay mode keeps the cpal mic
+    /// closed and feeds the mixer from this session instead.
+    pub relay: Mutex<Option<RelayInputSession>>,
     pub presets: PresetStore,
     pub last_stream_error: Arc<Mutex<Option<LastStreamError>>>,
     /// Latest stream status, kept in sync by [`crate::stream::pipeline`] on
@@ -110,6 +115,7 @@ impl AppState {
             capture: Mutex::new(None),
             capture_ctx,
             stream: tokio::sync::Mutex::new(None),
+            relay: Mutex::new(None),
             presets: PresetStore::new(app)?,
             last_stream_error: Arc::new(Mutex::new(None)),
             stream_status: Arc::new(Mutex::new(StreamStatus::Idle)),
