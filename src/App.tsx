@@ -59,7 +59,7 @@ function Shell({ settings, updateSettings }: ShellProps) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<
-    "metadata" | "relay" | null
+    "metadata" | "relay" | "servers" | null
   >(null);
   const [showAbout, setShowAbout] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -218,6 +218,20 @@ function Shell({ settings, updateSettings }: ShellProps) {
     }
   };
 
+  /** Switch to another saved server preset without leaving the current mode.
+   *  Updates both the persisted active-preset pointer and the live config
+   *  used by the streaming pipeline; keeps the current deviceId untouched
+   *  because the mic doesn't follow the server. */
+  const selectPreset = useCallback(
+    (name: string) => {
+      const p = presets.find((pr) => pr.name === name);
+      if (!p) return;
+      void updateSettings({ ...settings, activePreset: name });
+      void updateConfig({ ...p.config, deviceId: config?.deviceId ?? "" });
+    },
+    [presets, settings, updateSettings, updateConfig, config?.deviceId],
+  );
+
   const handleStop = async () => {
     setActionError(null);
     try {
@@ -333,7 +347,15 @@ function Shell({ settings, updateSettings }: ShellProps) {
                 status={status}
                 onStart={handleStart}
                 onStop={handleStop}
-                deviceReady={!!deviceId}
+                deviceId={deviceId}
+                onDeviceChange={setDeviceId}
+                presets={presets}
+                activePresetName={settings.activePreset ?? null}
+                onSelectPreset={selectPreset}
+                onManageServers={() => {
+                  setSettingsInitialSection("servers");
+                  setShowSettings(true);
+                }}
               />
             </div>
           )}
@@ -373,6 +395,13 @@ function Shell({ settings, updateSettings }: ShellProps) {
                   void api.setActiveRelaySource(name);
                   void api.startRelayInput(name);
                   void updateSettings({ ...settings, activeRelaySource: name });
+                }}
+                presets={presets}
+                activePresetName={settings.activePreset ?? null}
+                onSelectPreset={selectPreset}
+                onManageServers={() => {
+                  setSettingsInitialSection("servers");
+                  setShowSettings(true);
                 }}
               />
             </div>

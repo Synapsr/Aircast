@@ -27,9 +27,9 @@ import {
 } from "@/types";
 
 /// Tab to focus when the modal mounts. Used by in-app deep links (e.g. the
-/// "edit" button on the live broadcast strip, or the "Add a relay URL" CTA
-/// in Relay mode).
-export type SettingsInitialSection = "metadata" | "relay" | null;
+/// "edit" button on the live broadcast strip, the "Add a relay URL" CTA in
+/// Relay mode, or the "Manage" link on the server destination card).
+export type SettingsInitialSection = "servers" | "metadata" | "relay" | null;
 
 type SettingsTab = "servers" | "relay" | "metadata" | "advanced";
 
@@ -68,6 +68,7 @@ export function SettingsModal({
     if (!open) return;
     if (initialSection === "metadata") setActiveTab("metadata");
     else if (initialSection === "relay") setActiveTab("relay");
+    else if (initialSection === "servers") setActiveTab("servers");
     // initialSection === null means "open wherever we already were".
   }, [open, initialSection]);
   const [activeName, setActiveNameState] = useState<string | null>(

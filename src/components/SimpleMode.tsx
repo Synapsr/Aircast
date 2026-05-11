@@ -1,9 +1,11 @@
-import { Server } from "lucide-react";
+import { FlowArrow } from "@/components/FlowArrow";
 import { GoLiveButton } from "@/components/GoLiveButton";
+import { MicSourceCard } from "@/components/MicSourceCard";
+import { ServerDestinationCard } from "@/components/ServerDestinationCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { VuMeter } from "@/components/VuMeter";
 import { useT } from "@/i18n/context";
-import type { StreamConfig, StreamStatus } from "@/types";
+import type { Preset, StreamConfig, StreamStatus } from "@/types";
 
 interface Props {
   level: number;
@@ -12,9 +14,24 @@ interface Props {
   status: StreamStatus;
   onStart: () => void;
   onStop: () => void;
-  deviceReady: boolean;
+  /** Currently selected mic device id. */
+  deviceId: string | null;
+  onDeviceChange: (id: string) => void;
+  /** Server presets list (drives the destination card dropdown). */
+  presets: Preset[];
+  /** Name of the currently active server preset. */
+  activePresetName: string | null;
+  /** Switch to another saved server preset by name. */
+  onSelectPreset: (name: string) => void;
+  /** Open Setup on the Servers tab — used for manage + empty-state CTA. */
+  onManageServers: () => void;
 }
 
+/**
+ * Simple mode displays the signal flow at a glance: mic → server.
+ * Both cards are interactive — click the source to change device, click
+ * the destination to switch server preset. VU + Go Live + status sit below.
+ */
 export function SimpleMode({
   level,
   vuActive,
@@ -22,46 +39,39 @@ export function SimpleMode({
   status,
   onStart,
   onStop,
-  deviceReady,
+  deviceId,
+  onDeviceChange,
+  presets,
+  activePresetName,
+  onSelectPreset,
+  onManageServers,
 }: Props) {
   const { t } = useT();
-  const canStart = deviceReady && !!config && status.kind !== "connecting";
-  const mountPath = config
-    ? config.mount.startsWith("/")
-      ? config.mount
-      : `/${config.mount}`
-    : null;
+  const canStart = !!deviceId && !!config && status.kind !== "connecting";
 
   return (
-    <section className="flex flex-col items-center gap-7">
-      {/* Server pill — minimal, subtle, but informative */}
-      {config ? (
-        <div className="flex max-w-full items-center gap-2 rounded-full bg-zinc-900/80 px-4 py-2 text-xs ring-1 ring-zinc-800">
-          <Server className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-          <span className="truncate text-zinc-200">
-            {config.host}:{config.port}
-            {mountPath}
-          </span>
-          <span className="hidden h-3 w-px bg-zinc-800 sm:block" />
-          <span className="hidden shrink-0 text-zinc-500 sm:block">
-            {config.format.toUpperCase()} · {config.bitrate} kbps
-          </span>
-        </div>
-      ) : (
-        <div className="rounded-full bg-zinc-900/60 px-4 py-2 text-xs text-zinc-500 ring-1 ring-zinc-800/80">
-          {t("simple.noServer")}
-        </div>
-      )}
+    <section className="flex flex-col items-center gap-6">
+      {/* Source → destination flow */}
+      <div className="flex w-full flex-col gap-0">
+        <MicSourceCard value={deviceId} onChange={onDeviceChange} />
+        <FlowArrow />
+        <ServerDestinationCard
+          presets={presets}
+          activeName={activePresetName}
+          onSelect={onSelectPreset}
+          onManage={onManageServers}
+        />
+      </div>
 
-      {/* VU meter — full width with a label above */}
-      <div className="flex w-full flex-col gap-2">
+      {/* Live meter */}
+      <div className="flex w-full flex-col gap-2 pt-2">
         <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-zinc-500">
           <span>{t("vu.label")}</span>
         </div>
         <VuMeter level={level} active={vuActive} />
       </div>
 
-      {/* Big primary action */}
+      {/* Primary action */}
       <div className="w-full">
         <GoLiveButton
           status={status}
@@ -71,7 +81,6 @@ export function SimpleMode({
         />
       </div>
 
-      {/* Status under the button */}
       <StatusBadge status={status} />
     </section>
   );

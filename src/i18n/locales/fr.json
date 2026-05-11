@@ -190,6 +190,15 @@
     "edit": "Modifier",
     "editHint": "Ouvrir les réglages de diffusion du titre"
   },
+  "flow": {
+    "micLabel": "Microphone",
+    "relayLabel": "Flux amont",
+    "serverLabel": "Serveur",
+    "servers": "Serveurs",
+    "manage": "Gérer",
+    "serverPickCTA": "Ajouter un serveur",
+    "serverPickPrompt": "Choisir un serveur…"
+  },
   "modeSwitch": {
     "title": "Changement de mode en direct",
     "subtitle": "Ça va impacter ce qui passe actuellement à l'antenne.",

@@ -190,6 +190,15 @@
     "edit": "Edit",
     "editHint": "Open the broadcast title settings"
   },
+  "flow": {
+    "micLabel": "Microphone",
+    "relayLabel": "Upstream source",
+    "serverLabel": "Server",
+    "servers": "Servers",
+    "manage": "Manage",
+    "serverPickCTA": "Add a server",
+    "serverPickPrompt": "Pick a server…"
+  },
   "modeSwitch": {
     "title": "Switching mode while on air",
     "subtitle": "This will affect what's currently broadcasting.",
