@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // Downloads a minimal LGPL ffmpeg build for the host platform and places it
-// at src-tauri/binaries/ffmpeg-<rust-target-triple>, which is the layout
-// Tauri's `bundle.externalBin` expects.
+// at src-tauri/binaries/aircast-ffmpeg-<rust-target-triple>, which is the
+// layout Tauri's `bundle.externalBin` expects. The `aircast-` prefix is
+// load-bearing on Linux: Tauri's deb bundler installs sidecars to
+// /usr/bin/<base-name>, and a bare `ffmpeg` name would collide with the
+// system ffmpeg package on Ubuntu 24.10+, breaking dpkg install.
 //
 // Sources:
 //   - Linux x86_64:   BtbN/FFmpeg-Builds (lgpl, static)
@@ -78,7 +81,7 @@ if (!PLAN) {
 }
 
 const targetExt = platform === "win32" ? ".exe" : "";
-const targetName = `ffmpeg-${PLAN.triple}${targetExt}`;
+const targetName = `aircast-ffmpeg-${PLAN.triple}${targetExt}`;
 const targetPath = join(binDir, targetName);
 
 if (existsSync(targetPath)) {

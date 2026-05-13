@@ -104,9 +104,11 @@ jobs:
         # them via a dedicated step that only runs when the matching
         # secrets are present.
 
-      # Portable Windows zip: aircast.exe + ffmpeg.exe side-by-side, no install,
-      # no admin. Just extract and run. Requires WebView2 runtime on the host
-      # (default on Windows 10 1803+ and Windows 11).
+      # Portable Windows zip: Aircast.exe + aircast-ffmpeg.exe side-by-side,
+      # no install, no admin. Just extract and run. The sidecar keeps the
+      # `aircast-` prefix so it matches what `stream::ffmpeg_path::resolve`
+      # looks for next to the running executable. Requires WebView2 runtime
+      # on the host (default on Windows 10 1803+ and Windows 11).
       - name: Package portable Windows zip
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: pwsh
@@ -114,7 +116,7 @@ jobs:
           $portableDir = "dist-portable/Aircast-portable-windows-x64"
           New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
           Copy-Item "src-tauri/target/${{ matrix.target }}/release/aircast.exe" "$portableDir/Aircast.exe"
-          Copy-Item "src-tauri/binaries/ffmpeg-${{ matrix.target }}.exe" "$portableDir/ffmpeg.exe"
+          Copy-Item "src-tauri/binaries/aircast-ffmpeg-${{ matrix.target }}.exe" "$portableDir/aircast-ffmpeg.exe"
           # WebView2Loader.dll lands in the build dir on some toolchain combos.
           # Ship it when present; the app falls back to the system one otherwise.
           $loader = Get-ChildItem "src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll" -ErrorAction SilentlyContinue

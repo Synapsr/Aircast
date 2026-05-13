@@ -2,21 +2,27 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager};
 
-/// Resolve the ffmpeg binary path. Checks (in order):
-/// 1. Next to the running executable (Tauri places sidecars here on macOS/Windows bundled apps,
-///    and in `target/<profile>/` during dev when `bundle.externalBin` is configured).
-/// 2. The Tauri resource directory (some Linux packagings).
-/// 3. System PATH (development without sidecar).
+/// Resolve the ffmpeg binary path. The bundled sidecar is namespaced
+/// `aircast-ffmpeg` (load-bearing on Linux: a bare `ffmpeg` in the deb would
+/// land at `/usr/bin/ffmpeg` and collide with the system ffmpeg package).
+///
+/// Checks, in order:
+/// 1. `aircast-ffmpeg` next to the running executable — where Tauri places
+///    sidecars in bundled apps and copies them in dev when `externalBin`
+///    is configured.
+/// 2. `aircast-ffmpeg` in the Tauri resource directory (some Linux paths).
+/// 3. System `ffmpeg` on PATH — the dev fallback for contributors who haven't
+///    run `pnpm fetch-ffmpeg`.
 pub fn resolve(app: &AppHandle) -> PathBuf {
-    let bin_name = if cfg!(windows) {
-        "ffmpeg.exe"
+    let sidecar_name = if cfg!(windows) {
+        "aircast-ffmpeg.exe"
     } else {
-        "ffmpeg"
+        "aircast-ffmpeg"
     };
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
-            let candidate = parent.join(bin_name);
+            let candidate = parent.join(sidecar_name);
             if candidate.exists() {
                 return candidate;
             }
@@ -24,11 +30,11 @@ pub fn resolve(app: &AppHandle) -> PathBuf {
     }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let candidate = resource_dir.join(bin_name);
+        let candidate = resource_dir.join(sidecar_name);
         if candidate.exists() {
             return candidate;
         }
     }
 
-    PathBuf::from(bin_name)
+    PathBuf::from(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" })
 }

@@ -1,6 +1,6 @@
 {
   "bundle": {
-    "externalBin": ["binaries/ffmpeg"],
+    "externalBin": ["binaries/aircast-ffmpeg"],
     "resources": []
   }
 }

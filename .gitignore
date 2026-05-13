@@ -30,6 +30,7 @@ src-tauri/target
 src-tauri/gen
 
 # ffmpeg sidecar binaries (fetched via `pnpm fetch-ffmpeg`)
+src-tauri/binaries/aircast-ffmpeg-*
 src-tauri/binaries/ffmpeg-*
 src-tauri/.ffmpeg-tmp
 
