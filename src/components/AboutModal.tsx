@@ -27,10 +27,12 @@ export function AboutModal({ open, onClose }: Props) {
     api.openExternal("https://synapsr.io").catch(() => {});
   }
 
-  function openDrane() {
-    api
-      .openExternal("https://culturesnumeriques.ac-rennes.fr/spip.php?rubrique80")
-      .catch(() => {});
+  function openSuiteStudio() {
+    api.openExternal("https://suite.studio/").catch(() => {});
+  }
+
+  function openPorteVoix() {
+    api.openExternal("https://porte-voix.app/").catch(() => {});
   }
 
   return (
@@ -58,9 +60,7 @@ export function AboutModal({ open, onClose }: Props) {
 
         <div className="flex flex-col items-center gap-1">
           <h2 className="text-xl font-semibold tracking-tight">Aircast</h2>
-          <p className="text-xs text-zinc-500">
-            {t("about.tagline")}
-          </p>
+          <p className="text-xs text-zinc-500">{t("about.tagline")}</p>
         </div>
 
         <p className="max-w-sm text-sm leading-relaxed text-zinc-400">
@@ -78,29 +78,37 @@ export function AboutModal({ open, onClose }: Props) {
           <ExternalLink className="h-3.5 w-3.5 text-zinc-400 transition-transform group-hover:translate-x-0.5" />
         </button>
 
-        <p className="text-[11px] text-zinc-600">
-          {t("about.license")}
-        </p>
+        <p className="text-[11px] text-zinc-600">{t("about.license")}</p>
 
-        {/* Institutional sponsor — clickable banner. We host the asset on the
-            DRANE PodEduc instance so the source of truth stays with them. */}
-        <div className="mt-2 flex w-full flex-col items-center gap-2 border-t border-zinc-800 pt-5">
-          <span className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-            {t("about.sponsoredBy")}
-          </span>
-          <button
-            type="button"
-            onClick={openDrane}
-            aria-label={t("about.draneAlt")}
-            className="block w-full overflow-hidden rounded-lg bg-white ring-1 ring-zinc-800 transition-all hover:ring-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50"
-          >
-            <img
-              src="https://podeduc.apps.education.fr/media/files/be7df5511bc2365fa61ea304696e5c777a2153718e3a30007267ed7d9e4c8f42/banniereinstitdynamique_N7Kkcgu.png"
-              alt={t("about.draneAlt")}
-              loading="lazy"
-              className="block w-full h-auto"
-            />
-          </button>
+        {/* Institutional sponsor — France 2030 logo + official wording, then
+            two related links separated by a dot. The logo intentionally has
+            no background tint: SVG colours are designed for both themes. */}
+        <div className="mt-2 flex w-full flex-col items-center gap-3 border-t border-zinc-800 pt-5">
+          <img
+            src="/france2030.svg"
+            alt={t("about.sponsorLogoAlt")}
+            className="h-16 w-auto"
+          />
+          <p className="max-w-sm text-[11px] leading-relaxed text-zinc-500">
+            {t("about.sponsorBody")}
+          </p>
+          <p className="flex flex-wrap items-center justify-center gap-x-2 text-[11px] text-zinc-500">
+            <button
+              type="button"
+              onClick={openSuiteStudio}
+              className="text-zinc-300 underline-offset-2 hover:text-rose-300 hover:underline"
+            >
+              {t("about.suiteStudio")}
+            </button>
+            <span aria-hidden className="text-zinc-700">·</span>
+            <button
+              type="button"
+              onClick={openPorteVoix}
+              className="text-zinc-300 underline-offset-2 hover:text-rose-300 hover:underline"
+            >
+              Porte-Voix.app
+            </button>
+          </p>
         </div>
       </div>
     </dialog>

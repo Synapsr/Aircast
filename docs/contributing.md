@@ -113,5 +113,5 @@ reproduce, what you expected, what happened.
 
 ## License
 
-Aircast is MIT-licensed. By contributing, you agree your contribution will be
+Aircast is GPL-3.0-or-later licensed. By contributing, you agree your contribution will be
 released under the same license.

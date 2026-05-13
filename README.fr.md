@@ -14,7 +14,7 @@
 
 [![Dernière release](https://img.shields.io/github/v/release/Synapsr/Aircast?style=for-the-badge&logo=github&label=Release)](https://github.com/Synapsr/Aircast/releases/latest)
 [![GitHub Stars](https://img.shields.io/github/stars/Synapsr/Aircast?style=for-the-badge&logo=github)](https://github.com/Synapsr/Aircast)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPL_3.0-blue?style=for-the-badge)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=for-the-badge&logo=tauri&logoColor=black)](https://tauri.app/)
 
 [⬇️ Télécharger](#%EF%B8%8F-démarrage-rapide) • [✨ Fonctionnalités](#-fonctionnalités) • [🏗️ Architecture](docs/architecture.md) • [🤝 Contribuer](docs/contributing.md)
@@ -50,7 +50,7 @@ Conçu pour les radios qui veulent **garder la main sur leurs outils** — sans 
 
 |        💸 **Gratuit & open-source**        |        🎙️ **Audio toujours actif**         |        🔁 **Mode Studio**         |
 | :----------------------------------------: | :-----------------------------------------: | :-------------------------------: |
-| Licence MIT. Aucun abonnement, jamais.     | Le monitor local ne coupe pas au Go Live.   | Musique, cartos, ducking, crossfade. |
+| Licence GPL-3.0. Aucun abonnement, jamais.     | Le monitor local ne coupe pas au Go Live.   | Musique, cartos, ducking, crossfade. |
 
 |       📦 **Auto-suffisant**       |        🖥️ **Vraiment cross-platform**        |       🌍 **i18n FR / EN**        |
 | :-------------------------------: | :------------------------------------------: | :------------------------------: |
@@ -217,7 +217,7 @@ pnpm build
 
 ## 📜 Licence
 
-- **Source d'Aircast** — MIT, voir [`LICENSE`](LICENSE).
+- **Source d'Aircast** — GPL-3.0-or-later, voir [`LICENSE`](LICENSE).
 - **ffmpeg embarqué** — build statique LGPL. Aircast lance ffmpeg comme sous-processus séparé : selon l'interprétation FSF de la "simple agrégation", la licence de ffmpeg ne se propage pas à la source d'Aircast.
 
 ---
@@ -232,12 +232,10 @@ Fait avec ♥ pour les radios, par [Synapsr](https://github.com/Synapsr).
 
 <div align="center">
 
-### Avec le soutien de
+<img src="public/france2030.svg" alt="France 2030" width="120" />
 
-<a href="https://culturesnumeriques.ac-rennes.fr/spip.php?rubrique80">
-  <img src="https://podeduc.apps.education.fr/media/files/be7df5511bc2365fa61ea304696e5c777a2153718e3a30007267ed7d9e4c8f42/banniereinstitdynamique_N7Kkcgu.png" alt="DRANE Bretagne" width="640" />
-</a>
+<sub>Opération soutenue par l'État dans le cadre de l'action *Territoires Numériques Éducatifs* du *Programme d'investissements d'avenir*, opérée par la Caisse des Dépôts.</sub>
 
-<sub>Compagnon du projet DRANE [Porte-Voix.app](https://porte-voix.app/)</sub>
+<sub>[Découvrez la Suite.Studio](https://suite.studio/) · [Porte-Voix.app](https://porte-voix.app/)</sub>
 
 </div>

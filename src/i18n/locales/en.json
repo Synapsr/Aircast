@@ -258,9 +258,10 @@
     "tagline": "Open-source radio streaming.",
     "body": "Aircast is a free, native desktop app for streaming a microphone (and more) to any Icecast server. No subscription, no cloud lock-in — your radio stays yours.",
     "visitSynapsr": "Visit synapsr.io",
-    "license": "MIT licensed · Built with Tauri, Rust and React",
-    "sponsoredBy": "With the support of",
-    "draneAlt": "DRANE Bretagne — French Ministry of Education's digital learning division"
+    "license": "GPL-3.0 licensed · Built with Tauri, Rust and React",
+    "sponsorLogoAlt": "France 2030",
+    "sponsorBody": "Operation supported by the French State as part of the Territoires Numériques Éducatifs initiative of the Programme d'investissements d'avenir, operated by Caisse des Dépôts.",
+    "suiteStudio": "Discover Suite.Studio"
   },
   "errors": {
     "openSetup": "Open Setup",

@@ -14,7 +14,7 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/Synapsr/Aircast?style=for-the-badge&logo=github&label=Release)](https://github.com/Synapsr/Aircast/releases/latest)
 [![GitHub Stars](https://img.shields.io/github/stars/Synapsr/Aircast?style=for-the-badge&logo=github)](https://github.com/Synapsr/Aircast)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPL_3.0-blue?style=for-the-badge)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=for-the-badge&logo=tauri&logoColor=black)](https://tauri.app/)
 
 [⬇️ Download](#%EF%B8%8F-quick-start) • [✨ Features](#-features) • [🏗️ Architecture](docs/architecture.md) • [🤝 Contributing](docs/contributing.md)
@@ -50,7 +50,7 @@ Built for radio operators who want to **own their tooling** — no subscriptions
 
 |             💸 **Free & Open-Source**             |          🎙️ **Always-On Audio**          |       🔁 **Studio Mode**       |
 | :-----------------------------------------------: | :--------------------------------------: | :----------------------------: |
-| MIT licensed. No subscriptions, no per-MB fees, ever. | Local monitor never cuts when going live. | Music queue, carts, ducking, crossfade. |
+| GPL-3.0 licensed. No subscriptions, no per-MB fees, ever. | Local monitor never cuts when going live. | Music queue, carts, ducking, crossfade. |
 
 |        📦 **Self-Contained**         |         🖥️ **Truly Cross-Platform**         |        🌍 **i18n FR / EN**         |
 | :----------------------------------: | :-----------------------------------------: | :--------------------------------: |
@@ -217,7 +217,7 @@ pnpm build
 
 ## 📜 License
 
-- **Aircast source** — MIT, see [`LICENSE`](LICENSE).
+- **Aircast source** — GPL-3.0-or-later, see [`LICENSE`](LICENSE).
 - **Bundled ffmpeg** — LGPL static build. Aircast spawns ffmpeg as a separate subprocess, so under the FSF "mere aggregation" interpretation, ffmpeg's license does not propagate to Aircast's source.
 
 ---
@@ -232,12 +232,10 @@ Made with ♥ for radio operators by [Synapsr](https://github.com/Synapsr).
 
 <div align="center">
 
-### With the support of
+<img src="public/france2030.svg" alt="France 2030" width="120" />
 
-<a href="https://culturesnumeriques.ac-rennes.fr/spip.php?rubrique80">
-  <img src="https://podeduc.apps.education.fr/media/files/be7df5511bc2365fa61ea304696e5c777a2153718e3a30007267ed7d9e4c8f42/banniereinstitdynamique_N7Kkcgu.png" alt="DRANE Bretagne" width="640" />
-</a>
+<sub>Operation supported by the French State as part of the *Territoires Numériques Éducatifs* initiative of the *Programme d'investissements d'avenir*, operated by Caisse des Dépôts.</sub>
 
-<sub>Companion to the DRANE project [Porte-Voix.app](https://porte-voix.app/)</sub>
+<sub>[Discover Suite.Studio](https://suite.studio/) · [Porte-Voix.app](https://porte-voix.app/)</sub>
 
 </div>
