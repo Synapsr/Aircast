@@ -254,7 +254,6 @@
     "testHint": "Manually pushes the composed title to your server. Useful to verify credentials and connectivity."
   },
   "about": {
-    "proudly": "Proudly created by",
     "tagline": "Open-source radio streaming.",
     "body": "Aircast is a free, native desktop app for streaming a microphone (and more) to any Icecast server. No subscription, no cloud lock-in — your radio stays yours.",
     "visitSynapsr": "Visit synapsr.io",

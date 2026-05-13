@@ -254,7 +254,6 @@
     "testHint": "Pousse manuellement le titre composé vers le serveur. Utile pour vérifier les identifiants et la connectivité."
   },
   "about": {
-    "proudly": "Fièrement créé par",
     "tagline": "Streaming radio open-source.",
     "body": "Aircast est une application desktop native et gratuite pour diffuser un micro (et plus) vers n'importe quel serveur Icecast. Pas d'abonnement, pas de cloud verrouillé — votre antenne reste la vôtre.",
     "visitSynapsr": "Visiter synapsr.io",

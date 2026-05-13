@@ -59,7 +59,10 @@ export function AboutModal({ open, onClose }: Props) {
         />
 
         <div className="flex flex-col items-center gap-1">
-          <h2 className="text-xl font-semibold tracking-tight">Aircast</h2>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-xl font-semibold tracking-tight">Aircast</h2>
+            <span className="font-mono text-[11px] text-zinc-500">v{__APP_VERSION__}</span>
+          </div>
           <p className="text-xs text-zinc-500">{t("about.tagline")}</p>
         </div>
 

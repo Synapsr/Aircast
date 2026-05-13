@@ -47,10 +47,10 @@ export function StatusBar({ status, micOpen, deviceName, onAboutClick, mode }: P
       <button
         type="button"
         onClick={onAboutClick}
-        className="justify-self-center text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
+        title="Aircast"
+        className="justify-self-center font-mono text-[11px] tracking-tight text-zinc-500 transition-colors hover:text-zinc-300"
       >
-        {t("about.proudly")}{" "}
-        <span className="font-semibold text-zinc-300 hover:text-rose-300">Synapsr</span>
+        v{__APP_VERSION__}
       </button>
 
       <div className="flex items-center gap-3 justify-self-end">
