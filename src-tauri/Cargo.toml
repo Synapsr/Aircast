@@ -1,6 +1,6 @@
 [package]
 name = "aircast"
-version = "0.2.2"
+version = "0.2.3"
 description = "Minimal Icecast streaming desktop app"
 authors = ["Aircast contributors"]
 license = "GPL-3.0-or-later"

@@ -17,6 +17,22 @@ use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKitGTK 2.42+ uses a DMA-BUF renderer that fails to initialize EGL
+    // on several Ubuntu 24.10+ / mesa combinations, especially inside an
+    // AppImage. The crash is `Could not create default EGL display:
+    // EGL_BAD_PARAMETER. Aborting...` before the first window appears.
+    // Upstream WebKit ships this env var as the official fallback to the
+    // older shared-memory renderer — visually identical for an app like
+    // Aircast (no WebGL, no HTML5 video). Honour any explicit user choice.
+    //
+    // Single-threaded at this point (no Tokio, no Tauri builder, no
+    // WebKit), so `set_var` is sound even if glibc's setenv is not
+    // thread-safe.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())

@@ -36,5 +36,9 @@ pub fn resolve(app: &AppHandle) -> PathBuf {
         }
     }
 
-    PathBuf::from(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" })
+    PathBuf::from(if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    })
 }
