@@ -212,7 +212,7 @@ fn classify_error(line: &str) -> Option<String> {
     let lower = line.to_lowercase();
     if lower.contains("connection refused") {
         Some("Connection refused — the server isn't accepting connections.".into())
-    } else if lower.contains("network is unreachable") {
+    } else if lower.contains("network is unreachable") || lower.contains("no route to host") {
         Some("Network unreachable — check your internet connection.".into())
     } else if lower.contains("name or service not known") || lower.contains("could not resolve") {
         Some("Server address not found — check the host.".into())
@@ -222,8 +222,20 @@ fn classify_error(line: &str) -> Option<String> {
         Some("Server refused the connection — the mount may already be in use.".into())
     } else if lower.contains("404") {
         Some("Mount point not found on the server.".into())
-    } else if lower.contains("connection timed out") {
-        Some("Connection timed out — the server isn't responding.".into())
+    } else if lower.contains("connection timed out")
+        // Windows UCRT: ETIMEDOUT = 138 (Linux: 110). ffmpeg prints the raw
+        // errno from ff_neterrno() rather than the textual reason on Windows,
+        // so we match both the numeric form and the generic TCP-failure line
+        // it logs just before (e.g. "[tcp @ ...] Connection to tcp://host:port
+        // failed: Error number -138 occurred").
+        || lower.contains("error number -138")
+        || lower.contains("error number -110")
+        || (lower.contains("connection to tcp") && lower.contains("failed"))
+    {
+        Some(
+            "Connection timed out — check your firewall, antivirus, or that the streaming port isn't blocked on this network."
+                .into(),
+        )
     } else {
         None
     }
@@ -386,9 +398,32 @@ mod tests {
 
     #[test]
     fn classify_timeout() {
+        let expected = "Connection timed out — check your firewall, antivirus, or that the streaming port isn't blocked on this network.";
         assert_eq!(
             classify_error("Connection timed out"),
-            Some("Connection timed out — the server isn't responding.".into())
+            Some(expected.into())
+        );
+    }
+
+    #[test]
+    fn classify_windows_tcp_etimedout() {
+        // Real-world stderr line from a Windows user with port 8255 filtered.
+        let line = "[tcp @ 00000256c8472a00] Connection to tcp://stream.example.com:8255 failed: Error number -138 occurred";
+        assert!(classify_error(line).is_some());
+    }
+
+    #[test]
+    fn classify_linux_tcp_etimedout() {
+        let line =
+            "[tcp @ 0x12345] Connection to tcp://server:8000 failed: Error number -110 occurred";
+        assert!(classify_error(line).is_some());
+    }
+
+    #[test]
+    fn classify_no_route_to_host() {
+        assert_eq!(
+            classify_error("No route to host"),
+            Some("Network unreachable — check your internet connection.".into())
         );
     }
 
