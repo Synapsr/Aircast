@@ -57,13 +57,15 @@ use tauri::{AppHandle, Manager};
 use tokio::io::AsyncReadExt;
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::error::ProtocolError;
 use tokio_tungstenite::tungstenite::handshake::client::Request;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::tungstenite::error::ProtocolError;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Message, WebSocketConfig};
 use tokio_tungstenite::tungstenite::Error as WsError;
-use tokio_tungstenite::{connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+    connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
+};
 
 use crate::audio::capture::AudioFormat;
 use crate::presets::StreamConfig;
@@ -157,8 +159,13 @@ impl MetadataSink {
     /// or the queue is full — both are "try again next tick", not failures
     /// worth surfacing.
     pub fn try_send(&self, title: &str) -> Result<(), String> {
-        let guard = self.0.lock().map_err(|_| "metadata sink poisoned".to_string())?;
-        let tx = guard.as_ref().ok_or_else(|| "no live webcast session".to_string())?;
+        let guard = self
+            .0
+            .lock()
+            .map_err(|_| "metadata sink poisoned".to_string())?;
+        let tx = guard
+            .as_ref()
+            .ok_or_else(|| "no live webcast session".to_string())?;
         tx.try_send(title.to_string())
             .map_err(|e| format!("webcast metadata queue: {e}"))
     }
@@ -199,13 +206,23 @@ pub(crate) struct Failure {
 
 impl Failure {
     fn retryable(message: impl Into<String>) -> Self {
-        Self { message: message.into(), fatal: false }
+        Self {
+            message: message.into(),
+            fatal: false,
+        }
     }
     fn fatal(message: impl Into<String>) -> Self {
-        Self { message: message.into(), fatal: true }
+        Self {
+            message: message.into(),
+            fatal: true,
+        }
     }
     fn into_end(self, details: Option<String>) -> SessionEnd {
-        SessionEnd::Failed { message: self.message, details, fatal: self.fatal }
+        SessionEnd::Failed {
+            message: self.message,
+            details,
+            fatal: self.fatal,
+        }
     }
 }
 
@@ -272,7 +289,16 @@ pub async fn run_attempt(
     let pump = tokio::spawn(pump_encoder(stdout, audio_tx));
     capture_ctx.set_stream_tx(Some(stdin_tx));
 
-    let outcome = relay(app, socket, audio_rx, meta_rx, &status, &mut ffmpeg, stop_rx).await;
+    let outcome = relay(
+        app,
+        socket,
+        audio_rx,
+        meta_rx,
+        &status,
+        &mut ffmpeg,
+        stop_rx,
+    )
+    .await;
 
     capture_ctx.set_stream_tx(None);
     pump.abort();
@@ -281,7 +307,11 @@ pub async fn run_attempt(
     ffmpeg.shutdown().await;
 
     match outcome {
-        SessionEnd::Failed { message, details, fatal } => SessionEnd::Failed {
+        SessionEnd::Failed {
+            message,
+            details,
+            fatal,
+        } => SessionEnd::Failed {
             message,
             details: details.or(if tail.is_empty() { None } else { Some(tail) }),
             fatal,
@@ -336,7 +366,10 @@ pub(crate) async fn connect(config: &StreamConfig, url: &str) -> Result<Socket, 
 
     send_bounded(&mut socket, Message::Text(hello.to_string().into()), false)
         .await
-        .map_err(|f| Failure { message: format!("Could not send the handshake: {}", f.message), fatal: f.fatal })?;
+        .map_err(|f| Failure {
+            message: format!("Could not send the handshake: {}", f.message),
+            fatal: f.fatal,
+        })?;
 
     Ok(socket)
 }
@@ -352,9 +385,10 @@ fn build_request(url: &str) -> Result<Request, Failure> {
     // Liquidsoap compares this value with an exact, case-sensitive string
     // match. A subprotocol *list* ("webcast, chat") is rejected, and the
     // request then falls through to the plain-HTTP handler and 404s.
-    request
-        .headers_mut()
-        .insert("Sec-WebSocket-Protocol", HeaderValue::from_static("webcast"));
+    request.headers_mut().insert(
+        "Sec-WebSocket-Protocol",
+        HeaderValue::from_static("webcast"),
+    );
     request.headers_mut().insert(
         "User-Agent",
         HeaderValue::from_static(concat!("Aircast/", env!("CARGO_PKG_VERSION"))),
@@ -846,7 +880,6 @@ mod tests {
         );
     }
 
-
     // ───────── close-frame classification ─────────
     //
     // These assert on `Failure::fatal`, which is what the pipeline now acts on.
@@ -939,7 +972,11 @@ mod tests {
         // and permanently end the broadcast.
         for status in [500u16, 502, 503, 504, 408, 429] {
             let f = http_failure(status);
-            assert!(!f.fatal, "HTTP {status} must be retryable, got: {}", f.message);
+            assert!(
+                !f.fatal,
+                "HTTP {status} must be retryable, got: {}",
+                f.message
+            );
         }
     }
 
@@ -1060,18 +1097,27 @@ mod tests {
             .and_then(|v| v.parse().ok())
             .unwrap_or(25);
         let ffmpeg_bin = std::env::var("AIRCAST_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
-        let nonce = std::env::var("AIRCAST_WEBCAST_NONCE").unwrap_or_else(|_| "Aircast probe".into());
+        let nonce =
+            std::env::var("AIRCAST_WEBCAST_NONCE").unwrap_or_else(|_| "Aircast probe".into());
 
         let url = config.webcast_url();
         eprintln!("connecting to {url}");
-        let socket = connect(&config, &url).await.unwrap_or_else(|f| panic!("{}", f.message));
+        let socket = connect(&config, &url)
+            .await
+            .unwrap_or_else(|f| panic!("{}", f.message));
         eprintln!("upgraded, hello sent as {}", mime_for(&config.format));
 
         // A 440 Hz tone at -20 dBFS, encoded exactly as the app does and paced
         // at real time by `-re`, which is what the harbor's generator expects.
         let mut enc = tokio::process::Command::new(&ffmpeg_bin)
             .args(["-hide_banner", "-loglevel", "error"])
-            .args(["-re", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100"])
+            .args([
+                "-re",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:sample_rate=44100",
+            ])
             .args(["-af", "volume=-20dB"])
             .args(["-c:a", "libmp3lame", "-b:a", "128k"])
             .args(["-f", "mp3", "-id3v2_version", "0", "-write_xing", "0"])
@@ -1125,7 +1171,10 @@ mod tests {
         }
 
         eprintln!("sent {sent} frames / {bytes} bytes over {secs}s");
-        assert!(sent > 10, "the encoder barely produced anything: {sent} frames");
+        assert!(
+            sent > 10,
+            "the encoder barely produced anything: {sent} frames"
+        );
         // ~128 kbps => ~16 KiB/s. Well under means we were not pacing at real time.
         let expected = (secs as usize) * 16_000;
         assert!(

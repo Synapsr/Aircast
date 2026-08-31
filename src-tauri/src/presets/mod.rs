@@ -139,11 +139,7 @@ impl StreamConfig {
         if self.port == default_port {
             format!("{scheme}://{host}{}", self.normalized_mount())
         } else {
-            format!(
-                "{scheme}://{host}:{}{}",
-                self.port,
-                self.normalized_mount()
-            )
+            format!("{scheme}://{host}:{}{}", self.port, self.normalized_mount())
         }
     }
 }

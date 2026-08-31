@@ -8,8 +8,8 @@ use crate::audio::capture::AudioFormat;
 use crate::presets::{Settings, StreamConfig, Transport};
 use crate::state::{AppState, CaptureContext, LastStreamError};
 use crate::stream::ffmpeg::{is_fatal_error, EncoderOutput, FfmpegProcess};
-use crate::stream::webcast::{self, MetadataSink, SessionEnd};
 use crate::stream::status::{emit, StreamStatus};
+use crate::stream::webcast::{self, MetadataSink, SessionEnd};
 
 pub struct StreamHandle {
     stop_tx: Option<oneshot::Sender<()>>,

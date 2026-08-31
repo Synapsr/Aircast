@@ -279,13 +279,19 @@ mod tests {
         assert_eq!(presets[0].config.username, "loan");
         // A file with no `transport` key must read as the classic transport,
         // never as an empty default config.
-        assert_eq!(presets[0].config.transport, crate::presets::Transport::Icecast);
+        assert_eq!(
+            presets[0].config.transport,
+            crate::presets::Transport::Icecast
+        );
 
         let current = store.current_config().expect("currentConfig was lost");
         assert_eq!(current.port, 8255);
         assert_eq!(current.transport, crate::presets::Transport::Icecast);
 
-        assert_eq!(store.settings().active_preset.as_deref(), Some("Radios BZH"));
+        assert_eq!(
+            store.settings().active_preset.as_deref(),
+            Some("Radios BZH")
+        );
         assert_eq!(store.settings().language, "fr");
     }
 
