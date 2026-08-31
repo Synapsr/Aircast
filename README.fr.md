@@ -218,7 +218,7 @@ pnpm build
 ## 📜 Licence
 
 - **Source d'Aircast** — GPL-3.0-or-later, voir [`LICENSE`](LICENSE).
-- **ffmpeg embarqué** — build statique LGPL. Aircast lance ffmpeg comme sous-processus séparé : selon l'interprétation FSF de la "simple agrégation", la licence de ffmpeg ne se propage pas à la source d'Aircast.
+- **ffmpeg embarqué** — build statique récupéré à l'empaquetage par [`scripts/fetch-ffmpeg.mjs`](scripts/fetch-ffmpeg.mjs). LGPL sur Linux et Windows (builds BtbN), GPL sur macOS (builds evermeet / osxexperts, les seuls statiques disponibles). Les deux sont compatibles avec la licence GPL-3.0-or-later d'Aircast. Aircast lance ffmpeg comme sous-processus séparé : selon l'interprétation FSF de la "simple agrégation", la licence de ffmpeg ne se propage pas à la source d'Aircast.
 
 ---
 

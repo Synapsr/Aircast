@@ -218,7 +218,7 @@ pnpm build
 ## 📜 License
 
 - **Aircast source** — GPL-3.0-or-later, see [`LICENSE`](LICENSE).
-- **Bundled ffmpeg** — LGPL static build. Aircast spawns ffmpeg as a separate subprocess, so under the FSF "mere aggregation" interpretation, ffmpeg's license does not propagate to Aircast's source.
+- **Bundled ffmpeg** — static build, fetched at package time by [`scripts/fetch-ffmpeg.mjs`](scripts/fetch-ffmpeg.mjs). LGPL on Linux and Windows (BtbN builds), GPL on macOS (evermeet / osxexperts builds, which are the only static macOS ones available). Either is compatible with Aircast being GPL-3.0-or-later. Aircast spawns ffmpeg as a separate subprocess, so under the FSF "mere aggregation" interpretation ffmpeg's license does not propagate to Aircast's source.
 
 ---
 
