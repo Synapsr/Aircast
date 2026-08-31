@@ -130,4 +130,40 @@ describe("uniquePresetName", () => {
       uniquePresetName("Server", ["Server", "Server (2)", "Server (3)"]),
     ).toBe("Server (4)");
   });
+
+  it("defaults to the icecast transport", () => {
+    const parsed = parseServerLink(
+      "aircast://add-server?host=example.com",
+      "mic",
+    );
+    expect(parsed!.config.transport).toBe("icecast");
+    expect(parsed!.config.port).toBe(8000);
+  });
+
+  it("parses a webcast link and defaults its port to 443", () => {
+    const parsed = parseServerLink(
+      "aircast://add-server?host=stream.radios.bzh&transport=webcast&mount=/webdj/my-station/&user=dj",
+      "mic",
+    );
+    expect(parsed!.config.transport).toBe("webcast");
+    expect(parsed!.config.port).toBe(443);
+    expect(parsed!.config.mount).toBe("/webdj/my-station/");
+    expect(parsed!.config.username).toBe("dj");
+  });
+
+  it("lets an explicit port override the webcast default", () => {
+    const parsed = parseServerLink(
+      "aircast://add-server?host=example.com&transport=webcast&port=8443",
+      "mic",
+    );
+    expect(parsed!.config.port).toBe(8443);
+  });
+
+  it("falls back to icecast for an unknown transport", () => {
+    const parsed = parseServerLink(
+      "aircast://add-server?host=example.com&transport=carrier-pigeon",
+      "mic",
+    );
+    expect(parsed!.config.transport).toBe("icecast");
+  });
 });

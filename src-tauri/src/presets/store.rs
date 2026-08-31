@@ -220,6 +220,75 @@ mod tests {
         PresetStore::open(dir.path().join("aircast.json")).unwrap()
     }
 
+    /// A store written by Aircast 0.2.3, before `transport` existed.
+    ///
+    /// This is the highest-stakes compatibility invariant in the app:
+    /// `StreamConfig` has no container-level `#[serde(default)]`, and `open()`
+    /// falls back to `PersistedData::default()` when parsing fails — so a
+    /// *required* new field would fail every existing file and silently wipe
+    /// the user's entire preset library on the first launch after an update.
+    const LEGACY_JSON: &str = r#"{
+      "settings": {
+        "reconnectIntervalSeconds": 5,
+        "language": "fr",
+        "activePreset": "Radios BZH",
+        "metadata": { "enabled": true, "mode": "auto" }
+      },
+      "currentConfig": {
+        "deviceId": "Micro MacBook Air",
+        "host": "stream.radios.bzh",
+        "port": 8255,
+        "mount": "/",
+        "username": "loan",
+        "password": "secret",
+        "bitrate": 128,
+        "format": "mp3"
+      },
+      "presets": [
+        {
+          "name": "Radios BZH",
+          "config": {
+            "deviceId": "Micro MacBook Air",
+            "host": "stream.radios.bzh",
+            "port": 8255,
+            "mount": "/",
+            "username": "loan",
+            "password": "secret",
+            "bitrate": 128,
+            "format": "mp3"
+          }
+        }
+      ],
+      "mode": "studio",
+      "carts": []
+    }"#;
+
+    #[test]
+    fn a_pre_transport_store_survives_the_upgrade() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("aircast.json");
+        std::fs::write(&path, LEGACY_JSON).unwrap();
+
+        let store = PresetStore::open(path).unwrap();
+
+        let presets = store.list_presets();
+        assert_eq!(presets.len(), 1, "presets were wiped by the upgrade");
+        assert_eq!(presets[0].name, "Radios BZH");
+        assert_eq!(presets[0].config.host, "stream.radios.bzh");
+        assert_eq!(presets[0].config.port, 8255);
+        assert_eq!(presets[0].config.username, "loan");
+        // A file with no `transport` key must read as the classic transport,
+        // never as an empty default config.
+        assert_eq!(presets[0].config.transport, crate::presets::Transport::Icecast);
+
+        let current = store.current_config().expect("currentConfig was lost");
+        assert_eq!(current.port, 8255);
+        assert_eq!(current.transport, crate::presets::Transport::Icecast);
+
+        assert_eq!(store.settings().active_preset.as_deref(), Some("Radios BZH"));
+        assert_eq!(store.settings().language, "fr");
+    }
+
     fn sample_config() -> StreamConfig {
         StreamConfig {
             device_id: "dev".into(),
@@ -230,6 +299,7 @@ mod tests {
             password: "secret".into(),
             bitrate: 128,
             format: StreamFormat::Mp3,
+            transport: crate::presets::Transport::Icecast,
         }
     }
 

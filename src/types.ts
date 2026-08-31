@@ -8,6 +8,17 @@ export type StreamFormat = "mp3" | "aac";
 
 export type Bitrate = 64 | 128 | 192 | 320;
 
+/**
+ * How the encoded audio reaches the server.
+ *
+ * - `icecast` — the classic source protocol, on the Icecast source port.
+ * - `webcast` — the Liquidsoap harbor WebSocket protocol that AzuraCast's own
+ *   Web DJ speaks. Runs over wss:// on port 443, so it works on school and
+ *   corporate networks where only 80 and 443 are open. AzuraCast (or any
+ *   Liquidsoap harbor) only — not a plain icecast2 server.
+ */
+export type Transport = "icecast" | "webcast";
+
 export interface StreamConfig {
   deviceId: string;
   host: string;
@@ -17,7 +28,14 @@ export interface StreamConfig {
   password: string;
   bitrate: Bitrate;
   format: StreamFormat;
+  transport: Transport;
 }
+
+/** Default port for each transport. */
+export const TRANSPORT_DEFAULT_PORT: Record<Transport, number> = {
+  icecast: 8000,
+  webcast: 443,
+};
 
 export interface Preset {
   name: string;
@@ -117,4 +135,5 @@ export const DEFAULT_CONFIG: Omit<StreamConfig, "deviceId"> = {
   password: "",
   bitrate: 128,
   format: "mp3",
+  transport: "icecast",
 };

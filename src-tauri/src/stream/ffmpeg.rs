@@ -45,10 +45,23 @@ impl FfmpegStatus {
     }
 }
 
+/// Where ffmpeg writes the encoded stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncoderOutput {
+    /// ffmpeg opens the connection itself and PUTs to `host:port/mount`.
+    /// It owns the transport; we only feed it PCM and read its stderr.
+    Icecast,
+    /// ffmpeg writes the encoded elementary stream to stdout and we own the
+    /// transport. Used by the webcast (WebSocket) transport, since ffmpeg has
+    /// no WebSocket muxer.
+    Pipe,
+}
+
 pub struct FfmpegProcess {
     id: u64,
     child: Child,
     stdin_tx: Option<mpsc::Sender<Vec<u8>>>,
+    stdout: Option<tokio::process::ChildStdout>,
     pub status: Arc<FfmpegStatus>,
 }
 
@@ -62,7 +75,12 @@ impl Drop for FfmpegProcess {
 }
 
 impl FfmpegProcess {
-    pub fn spawn(app: &AppHandle, config: &StreamConfig, format: AudioFormat) -> AppResult<Self> {
+    pub fn spawn(
+        app: &AppHandle,
+        config: &StreamConfig,
+        format: AudioFormat,
+        output: EncoderOutput,
+    ) -> AppResult<Self> {
         let binary = ffmpeg_path::resolve(app);
         log::info!("ffmpeg binary: {}", binary.display());
         let mut cmd = Command::new(&binary);
@@ -81,21 +99,38 @@ impl FfmpegProcess {
             "pipe:0",
         ]);
 
-        for arg in codec_args(config) {
+        for arg in codec_args(config, output) {
             cmd.arg(arg);
         }
-        // We use HTTP PUT to Icecast (2.4+) instead of the `icecast://`
-        // protocol. The icecast demuxer in ffmpeg hard-codes a check that
-        // rejects path "/" with "No mountpoint specified!", so any user with
-        // a root mount couldn't stream. The HTTP protocol has no such check.
-        cmd.arg("-method");
-        cmd.arg("PUT");
-        cmd.arg("-progress");
-        cmd.arg("pipe:2");
-        cmd.arg(build_output_url(config));
+
+        match output {
+            EncoderOutput::Icecast => {
+                // We use HTTP PUT to Icecast (2.4+) instead of the `icecast://`
+                // protocol. The icecast demuxer in ffmpeg hard-codes a check that
+                // rejects path "/" with "No mountpoint specified!", so any user with
+                // a root mount couldn't stream. The HTTP protocol has no such check.
+                cmd.arg("-method");
+                cmd.arg("PUT");
+                // `progress=continue` on stderr is what tells us the encoder is
+                // actually pushing bytes to the server — see `is_progress_line`.
+                cmd.arg("-progress");
+                cmd.arg("pipe:2");
+                cmd.arg(build_output_url(config));
+            }
+            EncoderOutput::Pipe => {
+                // Deliberately no `-progress` here: in pipe mode ffmpeg produces
+                // output as soon as it encodes, which says nothing about whether
+                // the socket is healthy. The webcast transport sets `became_live`
+                // itself, once a binary frame has actually been accepted.
+                cmd.arg("pipe:1");
+            }
+        }
 
         cmd.stdin(Stdio::piped())
-            .stdout(Stdio::null())
+            .stdout(match output {
+                EncoderOutput::Icecast => Stdio::null(),
+                EncoderOutput::Pipe => Stdio::piped(),
+            })
             .stderr(Stdio::piped())
             .kill_on_drop(true);
 
@@ -111,6 +146,15 @@ impl FfmpegProcess {
             .stderr
             .take()
             .ok_or_else(|| AppError::Stream("ffmpeg stderr not piped".into()))?;
+        let stdout = match output {
+            EncoderOutput::Pipe => Some(
+                child
+                    .stdout
+                    .take()
+                    .ok_or_else(|| AppError::Stream("ffmpeg stdout not piped".into()))?,
+            ),
+            EncoderOutput::Icecast => None,
+        };
 
         let (stdin_tx, stdin_rx) = mpsc::channel::<Vec<u8>>(STDIN_QUEUE_CAPACITY);
         let status = Arc::new(FfmpegStatus::default());
@@ -130,12 +174,19 @@ impl FfmpegProcess {
             id,
             child,
             stdin_tx: Some(stdin_tx),
+            stdout,
             status,
         })
     }
 
     pub fn stdin_sender(&self) -> Option<mpsc::Sender<Vec<u8>>> {
         self.stdin_tx.clone()
+    }
+
+    /// Hand the encoded-output pipe to the caller. Only `Some` when spawned
+    /// with [`EncoderOutput::Pipe`], and only for the first call.
+    pub fn take_stdout(&mut self) -> Option<tokio::process::ChildStdout> {
+        self.stdout.take()
     }
 
     pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
@@ -244,6 +295,11 @@ fn classify_error(line: &str) -> Option<String> {
 /// Errors that won't fix themselves on retry (bad credentials, missing mount, …).
 /// The pipeline uses this to abort the reconnect loop and surface the issue
 /// instead of looping forever.
+///
+/// This only governs the Icecast transport, where ffmpeg's English stderr is
+/// the only signal available. The webcast transport knows the answer exactly —
+/// from the close code and the HTTP status — and carries it explicitly rather
+/// than encoding it in wording and hoping this matcher agrees.
 pub fn is_fatal_error(message: &str) -> bool {
     let m = message.to_lowercase();
     m.contains("authentication failed")
@@ -252,29 +308,65 @@ pub fn is_fatal_error(message: &str) -> bool {
         || m.contains("server refused the connection")
 }
 
-fn codec_args(config: &StreamConfig) -> Vec<String> {
-    match config.format {
-        StreamFormat::Mp3 => vec![
-            "-codec:a".into(),
-            "libmp3lame".into(),
-            "-b:a".into(),
-            format!("{}k", config.bitrate),
-            "-content_type".into(),
-            "audio/mpeg".into(),
-            "-f".into(),
-            "mp3".into(),
-        ],
-        StreamFormat::Aac => vec![
-            "-codec:a".into(),
-            "aac".into(),
-            "-b:a".into(),
-            format!("{}k", config.bitrate),
-            "-content_type".into(),
-            "audio/aac".into(),
-            "-f".into(),
-            "adts".into(),
-        ],
+/// The MIME type that describes what the encoder produces.
+///
+/// Doubles as the `mime` field of the webcast hello frame. Liquidsoap's harbor
+/// truncates it at the first `;` and uses it purely to select a decoder, then
+/// libavformat re-probes the actual bytes — so these two values, which are
+/// both registered decoder MIMEs, are all the transport needs. Never send a
+/// MIME the harbor does not know: it raises `Unknown_codec` *after* claiming
+/// the mount, which can leave the mount unusable until the station restarts.
+pub fn mime_for(format: &StreamFormat) -> &'static str {
+    match format {
+        StreamFormat::Mp3 => "audio/mpeg",
+        StreamFormat::Aac => "audio/aac",
     }
+}
+
+fn codec_args(config: &StreamConfig, output: EncoderOutput) -> Vec<String> {
+    let (codec, container) = match config.format {
+        StreamFormat::Mp3 => ("libmp3lame", "mp3"),
+        StreamFormat::Aac => ("aac", "adts"),
+    };
+
+    let mut args: Vec<String> = vec![
+        "-codec:a".into(),
+        codec.into(),
+        "-b:a".into(),
+        format!("{}k", config.bitrate),
+    ];
+
+    match output {
+        EncoderOutput::Icecast => {
+            // `-content_type` is an option of the http muxer, so it is only
+            // valid when ffmpeg owns the connection.
+            args.push("-content_type".into());
+            args.push(mime_for(&config.format).into());
+            args.push("-f".into());
+            args.push(container.into());
+        }
+        EncoderOutput::Pipe => {
+            args.push("-f".into());
+            args.push(container.into());
+            if container == "mp3" {
+                // Emit a bare MP3 elementary stream: no ID3v2 header and no
+                // Xing/LAME frame. Both are written up-front and would be
+                // relayed as if they were audio, and the Xing frame in
+                // particular is a silent frame that only makes sense for a
+                // seekable file.
+                args.push("-id3v2_version".into());
+                args.push("0".into());
+                args.push("-write_xing".into());
+                args.push("0".into());
+            }
+            // Do not let the muxer sit on a packet: this is a live stream and
+            // latency matters more than write syscalls.
+            args.push("-flush_packets".into());
+            args.push("1".into());
+        }
+    }
+
+    args
 }
 
 /// Build the HTTP URL ffmpeg streams to via PUT. Icecast 2.4+ accepts source
@@ -353,6 +445,7 @@ mod tests {
             password: pass.into(),
             bitrate: 128,
             format,
+            transport: crate::presets::Transport::Icecast,
         }
     }
 
@@ -587,7 +680,7 @@ mod tests {
     #[test]
     fn codec_args_mp3_uses_libmp3lame() {
         let c = cfg("h", "/m", "u", "p", StreamFormat::Mp3);
-        let args = codec_args(&c);
+        let args = codec_args(&c, EncoderOutput::Icecast);
         assert!(args.contains(&"libmp3lame".to_string()));
         assert!(args.contains(&"audio/mpeg".to_string()));
         assert!(args.contains(&"mp3".to_string()));
@@ -597,7 +690,7 @@ mod tests {
     #[test]
     fn codec_args_aac_uses_native_aac() {
         let c = cfg("h", "/m", "u", "p", StreamFormat::Aac);
-        let args = codec_args(&c);
+        let args = codec_args(&c, EncoderOutput::Icecast);
         assert!(args.contains(&"aac".to_string()));
         assert!(args.contains(&"audio/aac".to_string()));
         assert!(args.contains(&"adts".to_string()));

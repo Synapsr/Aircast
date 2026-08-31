@@ -165,7 +165,17 @@
       "relay": "Relay sources",
       "metadata": "Title broadcast",
       "advanced": "Advanced"
-    }
+    },
+    "transport": "Connection type",
+    "transportIcecast": "Icecast / Shoutcast",
+    "transportWebcast": "AzuraCast (Web DJ)",
+    "webdjPath": "Web DJ path",
+    "webdjPathHint": "The path from your station's Web DJ page — usually /webdj/your-station/",
+    "endpointPreview": "Aircast will connect to",
+    "transportIcecastShort": "The station's usual streaming port.",
+    "transportWebcastShort": "Port 443 — gets through school and company firewalls.",
+    "endpointSecure": "Encrypted connection (TLS)",
+    "endpointPlaintext": "Not encrypted — allowed on this machine only"
   },
   "link": {
     "title": "Add server from link",
@@ -181,7 +191,8 @@
     "paste": "Paste link",
     "pasteHint": "Paste an aircast:// link from your clipboard.",
     "pasteInvalid": "The clipboard doesn't contain a valid Aircast link.",
-    "pasteEmpty": "Your clipboard is empty."
+    "pasteEmpty": "Your clipboard is empty.",
+    "transport": "Connection"
   },
   "broadcast": {
     "label": "Now broadcasting",
@@ -278,6 +289,7 @@
     "hideDetails": "Hide details",
     "copy": "Copy",
     "copied": "Copied!",
-    "ok": "OK"
+    "ok": "OK",
+    "webdjSourceSplit": "With the username “source”, the password cannot contain a comma or a colon — the server would read it as a second username. Use your DJ username instead."
   }
 }

@@ -1257,15 +1257,19 @@ function uniqueName(base: string, presets: Preset[]): string {
   return `${base} ${i}`;
 }
 
+/// Compare every field of a server config except `deviceId`, which is a
+/// per-machine choice and deliberately not part of a preset's identity.
+///
+/// Structural rather than a hand-written field list: an earlier version
+/// enumerated the fields, and when `transport` was added it was forgotten —
+/// so switching a preset from Icecast to Web DJ looked like "no change" and
+/// the debounced autosave silently dropped it.
 function sameConfig(a: StreamConfig | undefined, b: StreamConfig | undefined): boolean {
   if (!a || !b) return false;
-  return (
-    a.host === b.host &&
-    a.port === b.port &&
-    a.mount === b.mount &&
-    a.username === b.username &&
-    a.password === b.password &&
-    a.bitrate === b.bitrate &&
-    a.format === b.format
-  );
+  const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)]);
+  keys.delete("deviceId");
+  for (const key of keys) {
+    if (a[key as keyof StreamConfig] !== b[key as keyof StreamConfig]) return false;
+  }
+  return true;
 }

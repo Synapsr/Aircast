@@ -5,9 +5,10 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::oneshot;
 
 use crate::audio::capture::AudioFormat;
-use crate::presets::{Settings, StreamConfig};
+use crate::presets::{Settings, StreamConfig, Transport};
 use crate::state::{AppState, CaptureContext, LastStreamError};
-use crate::stream::ffmpeg::{is_fatal_error, FfmpegProcess};
+use crate::stream::ffmpeg::{is_fatal_error, EncoderOutput, FfmpegProcess};
+use crate::stream::webcast::{self, MetadataSink, SessionEnd};
 use crate::stream::status::{emit, StreamStatus};
 
 pub struct StreamHandle {
@@ -32,6 +33,7 @@ pub fn start(
     settings: Settings,
     format: AudioFormat,
     capture_ctx: CaptureContext,
+    meta_sink: MetadataSink,
 ) -> StreamHandle {
     let (stop_tx, stop_rx) = oneshot::channel();
     let app_clone = app.clone();
@@ -41,6 +43,7 @@ pub fn start(
         settings,
         format,
         capture_ctx,
+        meta_sink,
         stop_rx,
     ));
     StreamHandle {
@@ -54,7 +57,28 @@ enum AttemptOutcome {
     Failed {
         message: String,
         details: Option<String>,
+        /// `None` means "decide from the message text" — the Icecast path,
+        /// where ffmpeg's stderr is the only signal. The webcast transport
+        /// knows the answer exactly and says so.
+        fatal: Option<bool>,
     },
+}
+
+/// The webcast transport owns its own attempt loop; this maps its outcome onto
+/// the pipeline's, so the reconnect/backoff logic below stays transport-agnostic.
+fn from_session_end(end: SessionEnd) -> AttemptOutcome {
+    match end {
+        SessionEnd::Stopped => AttemptOutcome::Stopped,
+        SessionEnd::Failed {
+            message,
+            details,
+            fatal,
+        } => AttemptOutcome::Failed {
+            message,
+            details,
+            fatal: Some(fatal),
+        },
+    }
 }
 
 async fn run(
@@ -63,19 +87,45 @@ async fn run(
     settings: Settings,
     format: AudioFormat,
     capture_ctx: CaptureContext,
+    meta_sink: MetadataSink,
     mut stop_rx: oneshot::Receiver<()>,
 ) {
     loop {
-        log::info!("stream pipeline: connecting");
+        log::info!(
+            "stream pipeline: connecting ({:?} transport)",
+            config.transport
+        );
         emit(&app, StreamStatus::Connecting);
 
-        match run_one_attempt(&app, &config, format, &capture_ctx, &mut stop_rx).await {
+        let attempt = match config.transport {
+            Transport::Icecast => {
+                run_one_attempt(&app, &config, format, &capture_ctx, &mut stop_rx).await
+            }
+            Transport::Webcast => from_session_end(
+                webcast::run_attempt(
+                    &app,
+                    &config,
+                    format,
+                    &capture_ctx,
+                    &meta_sink,
+                    &mut stop_rx,
+                )
+                .await,
+            ),
+        };
+
+        match attempt {
             AttemptOutcome::Stopped => {
                 log::info!("stream pipeline: stopped by user");
                 emit(&app, StreamStatus::Idle);
                 return;
             }
-            AttemptOutcome::Failed { message, details } => {
+            AttemptOutcome::Failed {
+                message,
+                details,
+                fatal,
+            } => {
+                let is_fatal = fatal.unwrap_or_else(|| is_fatal_error(&message));
                 log::error!(
                     "stream pipeline: attempt failed — {message}{}",
                     details
@@ -106,10 +156,10 @@ async fn run(
                     },
                 );
 
-                if is_fatal_error(&message) || settings.reconnect_interval_seconds == 0 {
+                if is_fatal || settings.reconnect_interval_seconds == 0 {
                     log::info!(
                         "stream pipeline: not reconnecting ({})",
-                        if is_fatal_error(&message) {
+                        if is_fatal {
                             "fatal error"
                         } else {
                             "auto-reconnect disabled"
@@ -153,12 +203,13 @@ async fn run_one_attempt(
     capture_ctx: &CaptureContext,
     stop_rx: &mut oneshot::Receiver<()>,
 ) -> AttemptOutcome {
-    let mut ffmpeg = match FfmpegProcess::spawn(app, config, format) {
+    let mut ffmpeg = match FfmpegProcess::spawn(app, config, format, EncoderOutput::Icecast) {
         Ok(f) => f,
         Err(e) => {
             return AttemptOutcome::Failed {
                 message: e.to_string(),
                 details: None,
+                fatal: None,
             }
         }
     };
@@ -169,6 +220,7 @@ async fn run_one_attempt(
             return AttemptOutcome::Failed {
                 message: "ffmpeg stdin missing".into(),
                 details: None,
+                fatal: None,
             }
         }
     };
@@ -198,7 +250,11 @@ async fn run_one_attempt(
                     format!("ffmpeg exited unexpectedly ({:?})", exit.ok())
                 });
                 let details = if tail.is_empty() { None } else { Some(tail) };
-                outcome = AttemptOutcome::Failed { message, details };
+                outcome = AttemptOutcome::Failed {
+                    message,
+                    details,
+                    fatal: None,
+                };
                 break;
             }
             _ = &mut live_check => {
@@ -224,6 +280,7 @@ async fn run_one_attempt(
                             CONNECT_TIMEOUT_SECS
                         ),
                         details,
+                        fatal: None,
                     };
                     break;
                 }

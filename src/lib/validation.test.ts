@@ -11,9 +11,48 @@ const valid: StreamConfig = {
   password: "secret",
   bitrate: 128,
   format: "mp3",
+  transport: "icecast",
 };
 
 describe("validateStreamConfig", () => {
+  it("accepts a webcast config", () => {
+    expect(
+      validateStreamConfig({
+        ...valid,
+        transport: "webcast",
+        port: 443,
+        mount: "/webdj/my-station/",
+        username: "loan",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects a webcast 'source' login whose password would be mis-split", () => {
+    // AzuraCast splits on ',' before ':', so either character breaks it.
+    expect(
+      validateStreamConfig({
+        ...valid,
+        transport: "webcast",
+        username: "source",
+        password: "a,b",
+      }),
+    ).toBe("errors.webdjSourceSplit");
+    expect(
+      validateStreamConfig({
+        ...valid,
+        transport: "webcast",
+        username: "source",
+        password: "a:b",
+      }),
+    ).toBe("errors.webdjSourceSplit");
+  });
+
+  it("leaves icecast configs alone when the password has separators", () => {
+    expect(
+      validateStreamConfig({ ...valid, username: "source", password: "a:b" }),
+    ).toBeNull();
+  });
+
   it("accepts a fully-valid config", () => {
     expect(validateStreamConfig(valid)).toBeNull();
   });

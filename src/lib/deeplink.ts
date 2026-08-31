@@ -1,4 +1,11 @@
-import { DEFAULT_CONFIG, type Bitrate, type StreamConfig, type StreamFormat } from "@/types";
+import {
+  DEFAULT_CONFIG,
+  TRANSPORT_DEFAULT_PORT,
+  type Bitrate,
+  type StreamConfig,
+  type StreamFormat,
+  type Transport,
+} from "@/types";
 
 export interface ParsedServerLink {
   name: string;
@@ -10,6 +17,10 @@ const VALID_BITRATES: Bitrate[] = [64, 128, 192, 320];
 /**
  * Parse a deep-link URL like:
  *   `aircast://add-server?name=Prod&host=example.com&port=8000&mount=/live.mp3&user=source&pass=secret&format=mp3&bitrate=128`
+ *
+ * Add `transport=webcast` for an AzuraCast Web DJ endpoint, in which case
+ * `mount` is the WebDJ path (`/webdj/<station>/`) and `port` defaults to 443:
+ *   `aircast://add-server?host=stream.radios.bzh&transport=webcast&mount=/webdj/my-station/&user=dj`
  *
  * Required: `host`. Everything else falls back to sensible defaults.
  * Returns `null` if the URL isn't a valid Aircast add-server link.
@@ -33,8 +44,13 @@ export function parseServerLink(url: string, deviceId: string): ParsedServerLink
   const host = params.get("host")?.trim();
   if (!host) return null;
 
+  const transport: Transport =
+    params.get("transport")?.toLowerCase() === "webcast" ? "webcast" : "icecast";
+
   const portRaw = params.get("port");
-  const port = portRaw ? parseInt(portRaw, 10) : DEFAULT_CONFIG.port;
+  const port = portRaw
+    ? parseInt(portRaw, 10)
+    : TRANSPORT_DEFAULT_PORT[transport];
   if (!Number.isFinite(port) || port <= 0 || port > 65535) return null;
 
   const mountRaw = params.get("mount") ?? DEFAULT_CONFIG.mount;
@@ -66,6 +82,7 @@ export function parseServerLink(url: string, deviceId: string): ParsedServerLink
       password,
       format,
       bitrate,
+      transport,
     },
   };
 }

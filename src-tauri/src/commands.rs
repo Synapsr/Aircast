@@ -205,16 +205,19 @@ pub async fn start_stream(
         AppError::Stream("No input device active. Pick a microphone first.".into())
     })?;
 
-    let mount_display = if config.mount.starts_with('/') {
-        config.mount.clone()
-    } else {
-        format!("/{}", config.mount)
+    let target_display = match config.transport {
+        crate::presets::Transport::Icecast => format!(
+            "{}:{}{}",
+            config.host,
+            config.port,
+            config.normalized_mount()
+        ),
+        crate::presets::Transport::Webcast => config.webcast_url(),
     };
     log::info!(
-        "start_stream: target={}:{}{} codec={:?}@{}kbps source={}Hz/{}ch",
-        config.host,
-        config.port,
-        mount_display,
+        "start_stream: transport={:?} target={} codec={:?}@{}kbps source={}Hz/{}ch",
+        config.transport,
+        target_display,
         config.format,
         config.bitrate,
         format.sample_rate,
@@ -222,19 +225,26 @@ pub async fn start_stream(
     );
 
     let settings = state.presets.settings();
+
+    // Shared slot the webcast transport fills once its socket is up, so the
+    // metadata updater can send in-band frames without knowing anything about
+    // connection lifecycles. Unused by the Icecast transport.
+    let webcast_sink = stream::MetadataSink::new();
+
     let handle = stream::start(
         app.clone(),
         config.clone(),
         settings,
         format,
         state.capture_ctx.clone(),
+        webcast_sink.clone(),
     );
     *stream_guard = Some(handle);
 
     // Tell the metadata updater where to push titles. Pushes are gated on
     // `stream_live`, so the updater stays quiet until the pipeline reaches
     // the Live state.
-    let target = stream::metadata::PushTarget::from_config(&config);
+    let target = stream::metadata::PushTarget::from_config(&config, &webcast_sink);
     let _ = state
         .metadata_tx
         .try_send(stream::metadata::Command::SetTarget(Some(target)));

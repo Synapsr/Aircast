@@ -42,7 +42,8 @@ use tokio::net::TcpStream;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time;
 
-use crate::presets::{MetadataMode, MetadataSettings, StreamConfig};
+use crate::presets::{MetadataMode, MetadataSettings, StreamConfig, Transport};
+use crate::stream::webcast::MetadataSink;
 use crate::studio::{CartSnapshot, MusicSnapshot, TrackInfo};
 
 /// Frontend-facing event emitted whenever the title actually broadcast to
@@ -62,9 +63,9 @@ pub struct ComposeInput {
     pub stream_live: bool,
 }
 
-/// Where to send the next update — derived from the live `StreamConfig`.
+/// Coordinates of an Icecast `/admin/metadata` endpoint.
 #[derive(Debug, Clone)]
-pub struct PushTarget {
+pub struct IcecastTarget {
     pub host: String,
     pub port: u16,
     pub mount: String,
@@ -72,19 +73,37 @@ pub struct PushTarget {
     pub password: String,
 }
 
-impl PushTarget {
+impl IcecastTarget {
     pub fn from_config(config: &StreamConfig) -> Self {
-        let mount = if config.mount.starts_with('/') {
-            config.mount.clone()
-        } else {
-            format!("/{}", config.mount)
-        };
         Self {
             host: config.host.trim().to_string(),
             port: config.port,
-            mount,
+            mount: config.normalized_mount(),
             username: config.username.clone(),
             password: config.password.clone(),
+        }
+    }
+}
+
+/// Where to send the next update — derived from the live `StreamConfig`.
+///
+/// The two transports carry titles very differently: Icecast takes a separate
+/// authenticated HTTP request to `/admin/metadata`, while webcast sends a JSON
+/// text frame down the audio socket itself. The updater does not care — it
+/// composes a title and calls [`push_once`].
+#[derive(Debug, Clone)]
+pub enum PushTarget {
+    Icecast(IcecastTarget),
+    /// Handle onto whichever webcast session is currently connected. Empty
+    /// between sessions, which the updater treats as "try again next tick".
+    Webcast(MetadataSink),
+}
+
+impl PushTarget {
+    pub fn from_config(config: &StreamConfig, webcast_sink: &MetadataSink) -> Self {
+        match config.transport {
+            Transport::Icecast => Self::Icecast(IcecastTarget::from_config(config)),
+            Transport::Webcast => Self::Webcast(webcast_sink.clone()),
         }
     }
 }
@@ -186,9 +205,19 @@ pub fn render_template(
     parts.join(" — ")
 }
 
+/// Send one title update over whichever transport is active.
+async fn push_once(target: &PushTarget, title: &str) -> Result<(), String> {
+    match target {
+        PushTarget::Icecast(t) => push_icecast(t, title).await,
+        // In-band: the frame goes down the same socket as the audio, so there
+        // is no request, no auth and no round-trip to wait for.
+        PushTarget::Webcast(sink) => sink.try_send(title),
+    }
+}
+
 /// One push attempt to `/admin/metadata`. Source credentials are sent as
 /// HTTP Basic. Returns Ok on 2xx, Err with the response status/body otherwise.
-async fn push_once(target: &PushTarget, title: &str) -> Result<(), String> {
+async fn push_icecast(target: &IcecastTarget, title: &str) -> Result<(), String> {
     let path = format!(
         "/admin/metadata?mount={}&mode=updinfo&song={}",
         urlencode(&target.mount),
@@ -667,9 +696,8 @@ mod tests {
         assert!(r.chars().count() <= 81);
     }
 
-    #[test]
-    fn target_normalizes_mount_without_leading_slash() {
-        let cfg = StreamConfig {
+    fn sample_cfg(transport: Transport) -> StreamConfig {
+        StreamConfig {
             device_id: "d".into(),
             host: "  example.com  ".into(),
             port: 8000,
@@ -678,9 +706,27 @@ mod tests {
             password: "p".into(),
             bitrate: 128,
             format: crate::presets::StreamFormat::Mp3,
-        };
-        let target = PushTarget::from_config(&cfg);
+            transport,
+        }
+    }
+
+    #[test]
+    fn target_normalizes_mount_without_leading_slash() {
+        let target = IcecastTarget::from_config(&sample_cfg(Transport::Icecast));
         assert_eq!(target.mount, "/live");
         assert_eq!(target.host, "example.com");
+    }
+
+    #[test]
+    fn from_config_picks_the_transport() {
+        let sink = MetadataSink::new();
+        assert!(matches!(
+            PushTarget::from_config(&sample_cfg(Transport::Icecast), &sink),
+            PushTarget::Icecast(_)
+        ));
+        assert!(matches!(
+            PushTarget::from_config(&sample_cfg(Transport::Webcast), &sink),
+            PushTarget::Webcast(_)
+        ));
     }
 }

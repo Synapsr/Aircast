@@ -41,6 +41,21 @@ lofty = "0.21"
 # Base64 encoder for HTTP Basic auth on the metadata endpoint.
 base64 = "0.22"
 
+# WebSocket client for the AzuraCast/Liquidsoap "webcast" transport, which
+# tunnels the live stream over wss://:443 so it survives networks that block
+# the Icecast source port. Pinned to 0.29 rather than 0.30: 0.30 raises the
+# MSRV to 1.85 and this crate declares 1.83.
+#
+# native-tls (not rustls-tls-webpki-roots) is deliberate: it uses
+# Security.framework / SChannel / system OpenSSL, so a school or corporate
+# TLS-intercepting proxy whose root CA is installed in the OS trust store
+# still validates. webpki-roots bakes in the Mozilla list and would hard-fail
+# in exactly the deployment this transport exists for.
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect", "handshake", "native-tls"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+native-tls = "0.2"
+bytes = "1"
+
 [dev-dependencies]
 tempfile = "3"
 

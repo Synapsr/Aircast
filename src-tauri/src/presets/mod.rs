@@ -73,6 +73,26 @@ pub enum StreamFormat {
     Aac,
 }
 
+/// How the encoded audio reaches the server.
+///
+/// - `Icecast` — the classic source protocol. ffmpeg opens an HTTP PUT to
+///   `host:port/mount` and owns the connection. Needs the Icecast source port
+///   (typically 8000-8999) to be reachable.
+/// - `Webcast` — the Liquidsoap harbor WebSocket protocol that AzuraCast's own
+///   Web DJ speaks. Runs over `wss://` on port 443, so it traverses school and
+///   corporate networks that only allow 80/443. ffmpeg encodes to a pipe and
+///   Rust owns the socket.
+///
+/// `Webcast` only works against AzuraCast (or any Liquidsoap `input.harbor`),
+/// not a plain icecast2 server.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Transport {
+    #[default]
+    Icecast,
+    Webcast,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamConfig {
@@ -84,6 +104,58 @@ pub struct StreamConfig {
     pub password: String,
     pub bitrate: u32,
     pub format: StreamFormat,
+    /// MUST keep `#[serde(default)]`. `StreamConfig` has no container-level
+    /// `#[serde(default)]`, and `PresetStore::open` falls back to
+    /// `PersistedData::default()` when parsing fails — so a *required* new
+    /// field would fail to parse every existing aircast.json and silently wipe
+    /// the user's entire preset library on the first launch after an update.
+    #[serde(default)]
+    pub transport: Transport,
+}
+
+impl StreamConfig {
+    /// Mount with a guaranteed leading slash. Both transports treat the mount
+    /// as a URL path, so the normalisation is shared.
+    pub fn normalized_mount(&self) -> String {
+        if self.mount.starts_with('/') {
+            self.mount.clone()
+        } else {
+            format!("/{}", self.mount)
+        }
+    }
+
+    /// The `wss://` (or `ws://`) endpoint for [`Transport::Webcast`].
+    ///
+    /// TLS is mandatory except on loopback: the credentials travel inside the
+    /// first WebSocket frame, so plaintext is acceptable only where the bytes
+    /// cannot leave the machine. The Setup screen previews the resolved URL so
+    /// this is never a surprise.
+    pub fn webcast_url(&self) -> String {
+        let host = self.host.trim();
+        let scheme = if is_loopback_host(host) { "ws" } else { "wss" };
+        // Omit the port when it is the scheme default, so the preview reads
+        // `wss://stream.radios.bzh/webdj/foo/` rather than `…:443/webdj/foo/`.
+        let default_port = if scheme == "wss" { 443 } else { 80 };
+        if self.port == default_port {
+            format!("{scheme}://{host}{}", self.normalized_mount())
+        } else {
+            format!(
+                "{scheme}://{host}:{}{}",
+                self.port,
+                self.normalized_mount()
+            )
+        }
+    }
+}
+
+/// Hosts for which plaintext `ws://` is allowed. Anything that resolves off
+/// this machine must use TLS.
+fn is_loopback_host(host: &str) -> bool {
+    let h = host.trim().trim_start_matches('[').trim_end_matches(']');
+    h.eq_ignore_ascii_case("localhost")
+        || h == "::1"
+        || h.starts_with("127.")
+        || h.to_ascii_lowercase().ends_with(".local")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

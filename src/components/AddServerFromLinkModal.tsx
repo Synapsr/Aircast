@@ -61,6 +61,14 @@ export function AddServerFromLinkModal({ parsed, finalName, onCancel, onConfirm 
             <dl className="flex flex-col gap-2.5 rounded-xl bg-zinc-800/50 px-4 py-3.5">
               <Row label={t("link.name")} value={parsed.name} />
               <Row
+                label={t("link.transport")}
+                value={t(
+                  parsed.config.transport === "webcast"
+                    ? "settings.transportWebcast"
+                    : "settings.transportIcecast",
+                )}
+              />
+              <Row
                 label={t("link.server")}
                 value={`${parsed.config.host}:${parsed.config.port}${parsed.config.mount}`}
                 mono

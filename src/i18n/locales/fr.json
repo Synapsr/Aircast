@@ -165,7 +165,17 @@
       "relay": "Sources relais",
       "metadata": "Titre diffusé",
       "advanced": "Avancé"
-    }
+    },
+    "transport": "Type de connexion",
+    "transportIcecast": "Icecast / Shoutcast",
+    "transportWebcast": "AzuraCast (Web DJ)",
+    "webdjPath": "Chemin Web DJ",
+    "webdjPathHint": "Le chemin indiqué sur la page Web DJ de votre station — généralement /webdj/votre-station/",
+    "endpointPreview": "Aircast se connectera à",
+    "transportIcecastShort": "Le port de diffusion habituel de la station.",
+    "transportWebcastShort": "Port 443 — passe les pare-feux scolaires et d'entreprise.",
+    "endpointSecure": "Connexion chiffrée (TLS)",
+    "endpointPlaintext": "Non chiffrée — autorisée sur cette machine uniquement"
   },
   "link": {
     "title": "Ajouter un serveur depuis un lien",
@@ -181,7 +191,8 @@
     "paste": "Coller un lien",
     "pasteHint": "Colle un lien aircast:// depuis ton presse-papier.",
     "pasteInvalid": "Le presse-papier ne contient pas un lien Aircast valide.",
-    "pasteEmpty": "Ton presse-papier est vide."
+    "pasteEmpty": "Ton presse-papier est vide.",
+    "transport": "Connexion"
   },
   "broadcast": {
     "label": "Titre diffusé",
@@ -278,6 +289,7 @@
     "hideDetails": "Masquer les détails",
     "copy": "Copier",
     "copied": "Copié !",
-    "ok": "OK"
+    "ok": "OK",
+    "webdjSourceSplit": "Avec l'identifiant « source », le mot de passe ne peut contenir ni virgule ni deux-points : le serveur y lirait un second identifiant. Utilisez plutôt votre nom de DJ."
   }
 }
