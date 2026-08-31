@@ -96,13 +96,78 @@ jobs:
       - name: Fetch ffmpeg sidecar
         run: pnpm fetch-ffmpeg
 
+      # Apple signing + notarization.
+      #
+      # tauri-bundler checks `var_os("APPLE_CERTIFICATE")`, and GitHub expands a
+      # missing secret to "", which var_os reports as Some("") — so the bundler
+      # runs `security import` on an empty payload and the build dies. That is
+      # what forced the env vars to be dropped in 056003b. The fix is not to set
+      # them empty but to not export them at all unless they are really set, so
+      # a fork with no secrets still builds (unsigned) instead of failing.
+      - name: Stage Apple signing secrets
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE:-}" ]; then
+            echo "::notice::No Apple signing secrets configured — building unsigned."
+            exit 0
+          fi
+          # Heredoc form: an export password may contain characters that would
+          # break a plain KEY=VALUE line.
+          {
+            printf 'APPLE_CERTIFICATE<<__AIRCAST_EOF__\n%s\n__AIRCAST_EOF__\n' "$APPLE_CERTIFICATE"
+            printf 'APPLE_CERTIFICATE_PASSWORD<<__AIRCAST_EOF__\n%s\n__AIRCAST_EOF__\n' "$APPLE_CERTIFICATE_PASSWORD"
+          } >> "$GITHUB_ENV"
+          echo "::notice::Developer ID signing enabled."
+
+          # Notarization uses the App Store Connect API key. Never set
+          # APPLE_ID/APPLE_PASSWORD as well: the Apple-ID branch takes
+          # precedence in tauri-bundler, and APPLE_ID without APPLE_TEAM_ID is
+          # a hard error.
+          if [ -n "${APPLE_API_KEY_B64:-}" ]; then
+            keydir="$RUNNER_TEMP/private_keys"
+            mkdir -p "$keydir"
+            printf '%s' "$APPLE_API_KEY_B64" | base64 --decode > "$keydir/AuthKey_${APPLE_API_KEY}.p8"
+            chmod 600 "$keydir/AuthKey_${APPLE_API_KEY}.p8"
+            {
+              echo "APPLE_API_KEY=${APPLE_API_KEY}"
+              echo "APPLE_API_ISSUER=${APPLE_API_ISSUER}"
+              echo "APPLE_API_KEY_PATH=$keydir/AuthKey_${APPLE_API_KEY}.p8"
+            } >> "$GITHUB_ENV"
+            echo "::notice::Notarization enabled."
+          else
+            echo "::warning::Signing without notarization — macOS will still warn users."
+          fi
+
       - name: Build Tauri bundle
         run: pnpm tauri build --config src-tauri/tauri.bundle.conf.json --target ${{ matrix.target }}
-        # Code-signing env vars are intentionally not set: Tauri tries to
-        # `security import` whenever APPLE_CERTIFICATE exists, even empty,
-        # which fails. When real signing certs are configured later, add
-        # them via a dedicated step that only runs when the matching
-        # secrets are present.
+
+      # Tauri notarizes and staples the .app, but only codesigns the .dmg and
+      # never submits it (tauri#7533). An un-stapled .dmg still forces a
+      # network round-trip on first open, and fails outright offline — so
+      # staple it here.
+      - name: Notarize and staple the DMG
+        if: runner.os == 'macOS' && env.APPLE_API_KEY_PATH != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -name '*.dmg' | head -1)
+          echo "notarizing $dmg"
+          xcrun notarytool submit "$dmg" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait --timeout 30m
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          spctl -a -vvv -t open --context context:primary-signature "$dmg" || true
 
       # Portable Windows zip: Aircast.exe + aircast-ffmpeg.exe side-by-side,
       # no install, no admin. Just extract and run. The sidecar keeps the
