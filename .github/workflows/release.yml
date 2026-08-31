@@ -214,6 +214,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Both required by actions/attest-build-provenance: it mints a short-lived
+      # OIDC token to identify this workflow run to Sigstore, then writes the
+      # resulting attestation back to the repository.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -226,6 +231,38 @@ jobs:
       - name: List downloaded files
         run: find dist -type f | sort
 
+      # Lets anyone check that what they downloaded is byte-for-byte what this
+      # run produced. Free, and the only integrity signal Windows and Linux
+      # users get until those platforms are signed.
+      - name: Generate SHA256SUMS
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          # Artifacts land in per-bundle subdirectories (dmg/, msi/, nsis/, ...)
+          # because upload-artifact preserves the paths' common ancestor, but
+          # the release assets are flat. Emit bare filenames so that a user who
+          # downloads the assets next to SHA256SUMS can just run
+          # `sha256sum -c SHA256SUMS`.
+          : > SHA256SUMS
+          find . -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
+            -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
+            -o -name '*.zip' \) -print0 \
+            | sort -z \
+            | while IFS= read -r -d '' f; do
+                printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$(basename "$f")"
+              done >> SHA256SUMS
+          cat SHA256SUMS
+
+      # Cryptographically ties every artifact to this exact workflow run and
+      # commit, via Sigstore. Users verify with:
+      #   gh attestation verify Aircast_x.y.z_aarch64.dmg --repo Synapsr/Aircast
+      # It proves provenance, not that the binary is safe — but it is the one
+      # trust signal available for the unsigned Windows and Linux bundles.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: dist/SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -233,6 +270,7 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: false
           files: |
+            dist/SHA256SUMS
             dist/**/*.dmg
             dist/**/*.msi
             dist/**/*.exe
