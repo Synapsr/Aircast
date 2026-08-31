@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Downloads a minimal LGPL ffmpeg build for the host platform and places it
+// Downloads a minimal static ffmpeg build for the host platform and places it
 // at src-tauri/binaries/aircast-ffmpeg-<rust-target-triple>, which is the
 // layout Tauri's `bundle.externalBin` expects. The `aircast-` prefix is
 // load-bearing on Linux: Tauri's deb bundler installs sidecars to
@@ -10,7 +10,21 @@
 //   - Linux x86_64:   BtbN/FFmpeg-Builds (lgpl, static)
 //   - Linux aarch64:  BtbN/FFmpeg-Builds (lgpl, static)
 //   - Windows x86_64: BtbN/FFmpeg-Builds (lgpl, static)
-//   - macOS:          evermeet.cx (universal static, no GitHub release for macOS)
+//   - macOS arm64:    osxexperts.net (gpl, static)
+//   - macOS x86_64:   evermeet.cx (gpl, static)
+//
+// The macOS builds are GPL, not LGPL: both ship --enable-gpl. That is fine —
+// Aircast is GPL-3.0 — but it is why the two platforms differ here.
+//
+// evermeet publishes ONE macOS binary and it is x86_64 only (its API exposes a
+// single `zip`/`7z` download, no arch variants), despite an earlier comment
+// here claiming it was universal. Using it for the arm64 target shipped an
+// x86_64 sidecar inside an arm64 app, which silently required Rosetta 2 to
+// stream and failed outright on machines without it.
+//
+// The osxexperts URL carries the ffmpeg major version, so it needs bumping on
+// each new major. That is the price of the only static arm64 macOS build
+// available; there is no `latest` alias.
 //
 // If a build is missing for the host platform, the script prints a helpful
 // message and exits non-zero. v1: only attempts the host platform; CI handles
@@ -34,9 +48,10 @@ const PLAN = (() => {
   if (platform === "darwin" && arch === "arm64") {
     return {
       triple: "aarch64-apple-darwin",
-      url: "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+      url: "https://www.osxexperts.net/ffmpeg9arm.zip",
       archiveType: "zip",
       binaryRelative: ["ffmpeg"],
+      expectArch: "arm64",
     };
   }
   if (platform === "darwin" && arch === "x64") {
@@ -45,6 +60,7 @@ const PLAN = (() => {
       url: "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
       archiveType: "zip",
       binaryRelative: ["ffmpeg"],
+      expectArch: "x86_64",
     };
   }
   if (platform === "linux" && arch === "x64") {
@@ -122,6 +138,23 @@ if (platform !== "win32") {
 }
 
 rmSync(tmpDir, { recursive: true, force: true });
+
+// Guard against the failure this script already shipped once: a binary whose
+// architecture does not match the target triple. It costs one `lipo` call and
+// turns a silent, Rosetta-dependent release into a build failure.
+if (PLAN.expectArch) {
+  const got = execSync(`lipo -archs ${JSON.stringify(targetPath)}`, {
+    encoding: "utf8",
+  }).trim();
+  if (!got.split(/\s+/).includes(PLAN.expectArch)) {
+    rmSync(targetPath, { force: true });
+    console.error(
+      `✗ ${PLAN.url}\n  produced a ${got} binary but ${PLAN.triple} needs ${PLAN.expectArch}.\n` +
+        `  The upstream build probably changed. Fix the URL in this script.`,
+    );
+    process.exit(1);
+  }
+}
 
 console.log(`✓ Placed ${targetName} (${humanBytes(statSync(targetPath).size)})`);
 
