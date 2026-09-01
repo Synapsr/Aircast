@@ -152,19 +152,21 @@ jobs:
       - name: Build Tauri bundle
         run: pnpm tauri build --config src-tauri/tauri.bundle.conf.json --target ${{ matrix.target }}
 
-      # Notarization, with the failure modes kept apart on purpose:
+      # Notarization gates the release: nothing is published unless Apple has
+      # accepted the build and the ticket is stapled into the .dmg.
       #
-      #   Apple rejected the build  -> fail. The release really is broken, and
-      #                                shipping it would hand users a Gatekeeper
-      #                                warning we thought we had removed.
-      #   Apple did not answer      -> warn and continue. The notary service is
-      #                                regularly congested; a queue backlog is
-      #                                not a defect in this build, and failing
-      #                                the whole release over it is worse than
-      #                                shipping a signed-but-unstapled DMG.
+      # v0.3.1 shipped un-stapled because this step gave up after 45 minutes
+      # and continued anyway. Apple accepted it minutes later, so the download
+      # does work — Gatekeeper fetches the ticket online — but an un-stapled
+      # image cannot be verified offline, and publishing an artifact we could
+      # not confirm is not what a signed release is for.
       #
-      # In the second case the submission id is printed: once Apple catches up,
-      # `xcrun stapler staple` on the published DMG is enough — no rebuild.
+      # The budget is therefore hours, not minutes. Apple's own guidance is
+      # that most submissions finish within 15 minutes; a multi-hour wait means
+      # their queue is backed up, and waiting costs nothing but runner minutes.
+      # A timeout now fails the job, which skips the release job entirely
+      # (it `needs: build`), so a congested day delays a release instead of
+      # publishing a half-finished one. Re-running the workflow is cheap.
       #
       # We submit the .dmg rather than the .app because the notary service
       # scans the disk image's contents too, and it is the .dmg that users
@@ -184,18 +186,28 @@ jobs:
           echo "Submitting $(basename "$dmg")"
           id=$(xcrun notarytool submit "$dmg" "${auth[@]}" --output-format json | jq -r '.id')
           if [ -z "$id" ] || [ "$id" = "null" ]; then
-            echo "::warning::Could not reach the notary service — shipping signed but un-notarized."
-            exit 0
+            echo "::error::Could not reach the notary service."
+            exit 1
           fi
           echo "Submission id: $id"
 
-          # Poll rather than `--wait`, so a rejection and a timeout are
-          # distinguishable: `notarytool --wait` exits non-zero for both.
+          # Poll rather than `--wait`, so a rejection and a timeout stay
+          # distinguishable: `notarytool --wait` exits non-zero for both, and
+          # only one of them means this build is broken.
+          #
+          # NOTARY_MAX_MINUTES stays well under the 360-minute job limit, with
+          # room for the build that already ran.
+          : "${NOTARY_MAX_MINUTES:=180}"
+          polls=$(( NOTARY_MAX_MINUTES * 2 ))   # one poll every 30 s
           status="In Progress"
-          for _ in $(seq 1 90); do   # 90 x 30 s = 45 minutes
+          started=$SECONDS
+          for i in $(seq 1 "$polls"); do
             sleep 30
             status=$(xcrun notarytool info "$id" "${auth[@]}" --output-format json | jq -r '.status')
-            echo "  status: $status"
+            # One line a minute is enough to see progress without flooding.
+            if [ $(( i % 2 )) -eq 0 ]; then
+              echo "  [$(( (SECONDS - started) / 60 )) min] $status"
+            fi
             [ "$status" = "In Progress" ] || break
           done
 
@@ -203,7 +215,8 @@ jobs:
             Accepted)
               xcrun stapler staple "$dmg"
               xcrun stapler validate "$dmg"
-              echo "::notice::Notarized and stapled."
+              spctl -a -vvv -t open --context context:primary-signature "$dmg"
+              echo "::notice::Notarized and stapled after $(( (SECONDS - started) / 60 )) min."
               ;;
             Invalid|Rejected)
               echo "::error::Apple rejected this build."
@@ -211,8 +224,10 @@ jobs:
               exit 1
               ;;
             *)
-              echo "::warning::Apple did not answer within 45 min (status: $status). \
-          Shipping signed but un-notarized; staple later with: xcrun stapler staple <dmg> (submission $id)."
+              echo "::error::Apple did not answer within ${NOTARY_MAX_MINUTES} min (status: $status). \
+          Nothing has been published. Re-run this workflow once their queue clears; \
+          submission $id can also be inspected with: xcrun notarytool info $id"
+              exit 1
               ;;
           esac
 
